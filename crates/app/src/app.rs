@@ -1149,9 +1149,17 @@ impl BibleApp {
             // The time is pushed forward past the yield, because a demo has no frames to wait.
             #[cfg(feature = "speak")]
             "follow" => {
-                let verse: u8 = arg.parse().unwrap_or(1);
+                // `follow:<verse>` follows in the chapter on screen; `follow:<chapter>,<verse>` one
+                // the reader has scrolled away from.
+                let (chapter, verse) = match arg.split_once(',') {
+                    Some((ch, v)) => (ch.parse().ok(), v.parse().unwrap_or(1)),
+                    None => (None, arg.parse().unwrap_or(1)),
+                };
                 let now = ctx.input(|i| i.time);
-                let (c, _) = self.reader.location;
+                let here = self.reader.location.0;
+                let c = chapter
+                    .and_then(|number| bible_core::books::ChapterIdx::new(here.book(), number))
+                    .unwrap_or(here);
                 let at = bible_core::books::VerseRef::new(c.book(), c.chapter(), verse);
                 self.reader.follow(at, now + 60.0);
             }

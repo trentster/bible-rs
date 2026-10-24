@@ -323,14 +323,21 @@ impl Reader {
         // the reader's top edge, so that is part of the position, not an afterthought.
         let mut top = a.top - self.anchor.offset + self.top_pad;
         if c != self.anchor.chapter {
-            if c < self.anchor.chapter {
-                // The voice only moves forward; a verse behind us needs no page turn.
-                return;
-            }
-            match self.cache.get(&self.anchor.chapter) {
-                // The next chapter is the one below this one on the page.
-                Some(cur) if c.0 == self.anchor.chapter.0 + 1 => top += cur.layout.height,
-                _ => {
+            // A neighbouring chapter sits one page-height away, above or below the one on screen.
+            // That covers the voice crossing into the next chapter, and the reader having wandered
+            // into the one just after the reading.
+            let shift = if c.0 == self.anchor.chapter.0 + 1 {
+                self.cache.get(&self.anchor.chapter).map(|cur| cur.layout.height)
+            } else if self.anchor.chapter.0 == c.0 + 1 {
+                Some(-cached.layout.height)
+            } else {
+                None
+            };
+            match shift {
+                Some(shift) => top += shift,
+                // Further than a page away: the reader has gone somewhere else in the book, and the
+                // chapters in between may not even be typeset. Coming back is a jump, not a scroll.
+                None => {
                     self.pending_jump = Some((c, r.verse, false));
                     return;
                 }
