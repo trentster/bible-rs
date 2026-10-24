@@ -40,8 +40,10 @@ impl LookUp {
 
     /// The lookup that the selection or the last right-click calls for, if there is one.
     pub fn here(reader: &Reader, library: &Library, settings: &Settings) -> Option<Self> {
-        if let Some((word, verse)) = chosen(reader, library) {
-            return Some(Self::new(word, verse.to_string()));
+        match chosen(reader, library) {
+            Chosen::Words(word, verse) => return Some(Self::new(word, verse.to_string())),
+            Chosen::TooLong => return None,
+            Chosen::NoSuchWords => {}
         }
         let at = reader.clicked_text()?;
         let word = word_at(reader, library, settings, at)?;
@@ -74,7 +76,7 @@ impl LookUp {
         let rect = Rect::from_min_size(pos2(left, top), vec2(WIDTH, height));
 
         let mut close = false;
-        egui::Area::new(egui::Id::new("lookup-popover"))
+        let area = egui::Area::new(egui::Id::new("lookup-popover"))
             .order(Order::Foreground)
             .fixed_pos(rect.min)
             .show(ctx, |ui| {
@@ -109,34 +111,50 @@ impl LookUp {
                     y += 18.0;
                 }
             });
-        close
+        // A click anywhere outside closes it, as the note popover already behaves.
+        close || area.response.clicked_elsewhere()
     }
 }
 
-/// What a lookup at `pt` would ask about: the selected words, else the word under the pointer.
-/// `None` when neither gives anything worth looking up, and the menu then leaves the item out.
+/// What a lookup at `pt` would ask about, or `None` — and then the menu leaves the item out.
 pub fn target(reader: &Reader, library: &Library, settings: &Settings, pt: egui::Pos2) -> Option<String> {
-    if let Some((word, _)) = chosen(reader, library) {
-        return Some(word);
+    match chosen(reader, library) {
+        Chosen::Words(word, _) => Some(word),
+        Chosen::TooLong => None,
+        Chosen::NoSuchWords => word_at(reader, library, settings, reader.text_pos(pt)?),
     }
-    word_at(reader, library, settings, reader.text_pos(pt)?)
+}
+
+/// What the words dragged over amount to.
+enum Chosen {
+    /// Nothing is selected, so a lookup falls back to the word under the pointer.
+    NoSuchWords,
+    /// Words are selected, but too many to be a phrase: nothing is asked, and no fallback is made.
+    TooLong,
+    /// The words to ask about, and the verse they are in.
+    Words(String, VerseRef),
 }
 
 /// The words dragged over, when they are few enough to be a lookup rather than a whole verse.
-fn chosen(reader: &Reader, library: &Library) -> Option<(String, VerseRef)> {
-    let (span, id) = reader.text_span()?;
+fn chosen(reader: &Reader, library: &Library) -> Chosen {
+    let Some((span, id)) = reader.text_span() else { return Chosen::NoSuchWords };
     if span.first != span.last {
-        return None;
+        return Chosen::TooLong;
     }
-    let t = library.load(id).ok()?;
-    let v = t.find(span.first)?;
+    let Ok(t) = library.load(id) else { return Chosen::NoSuchWords };
+    let Some(v) = t.find(span.first) else { return Chosen::NoSuchWords };
     let chars: Vec<char> = v.text.chars().collect();
     let start = span.start.min(chars.len());
     let end = span.end.max(start).min(chars.len());
     let word: String = chars[start..end].iter().collect();
     let word = word.trim().to_string();
-    let few = word.split_whitespace().count() <= MAX_WORDS;
-    (few && !word.is_empty()).then_some((word, span.first))
+    if word.is_empty() {
+        return Chosen::NoSuchWords;
+    }
+    if word.split_whitespace().count() > MAX_WORDS {
+        return Chosen::TooLong;
+    }
+    Chosen::Words(word, span.first)
 }
 
 /// The word around a place in the text, trimmed of punctuation.
