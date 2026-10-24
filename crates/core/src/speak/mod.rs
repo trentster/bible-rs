@@ -1,9 +1,11 @@
 //! Read Aloud: what to say and how a session runs. Audio lives in the frontend.
 
+mod session;
 mod stretch;
 mod text;
 mod voices;
 
+pub use session::{Session, Sleep};
 pub use stretch::stretch;
 pub use text::{chapter, speakable, words, Utterance, ANNOUNCE_PAUSE_MS, VERSE_PAUSE_MS};
 pub use voices::{Accent, Voice, SPEECH_WPM, VOICES};
@@ -81,6 +83,64 @@ mod tests {
         let script = chapter("Hebrews", 7, &verses);
         assert_eq!(script.len(), 2);
         assert_eq!(script[1].text, "To whom also");
+    }
+
+    #[test]
+    fn a_session_reads_the_announcement_then_every_verse() {
+        let verses = vec![(1, "For this Melchisedec".to_string()), (2, "To whom also".to_string())];
+        let mut session = Session::new("Hebrews", 7, &verses, Sleep::Off);
+        assert!(session.next().is_none(), "nothing is said before it plays");
+        session.play();
+        assert_eq!(session.next().unwrap().text, "Hebrews, chapter seven");
+        assert_eq!(session.next().unwrap().verse, Some(1));
+        assert_eq!(session.next().unwrap().verse, Some(2));
+        assert!(session.next().is_none());
+        assert!(session.finished());
+    }
+
+    #[test]
+    fn the_sleep_timer_ends_the_reading_after_its_minutes() {
+        let verses = vec![(1, "one".to_string())];
+        let mut session = Session::new("Psalms", 23, &verses, Sleep::Minutes(15));
+        session.play();
+        assert!(!session.spoke(14.0 * 60.0));
+        assert_eq!(session.remaining(), Some(60.0));
+        assert!(session.spoke(60.0), "fifteen minutes of speech stops it");
+        assert_eq!(session.remaining(), Some(0.0));
+    }
+
+    #[test]
+    fn a_paused_session_says_nothing_further() {
+        let verses = vec![(1, "one".to_string())];
+        let mut session = Session::new("Psalms", 23, &verses, Sleep::Off);
+        session.play();
+        session.next();
+        session.pause();
+        assert!(session.next().is_none());
+        assert_eq!(session.position(), 1, "one of the two utterances was handed out");
+        assert!(!session.finished());
+    }
+
+    #[test]
+    fn a_session_can_start_where_the_reader_left_off() {
+        let verses = vec![(1, "one".to_string()), (2, "two".to_string()), (3, "three".to_string())];
+        let mut session = Session::new("Psalms", 23, &verses, Sleep::Off);
+        session.seek_to_verse(3);
+        session.play();
+        assert_eq!(session.next().unwrap().verse, Some(3));
+    }
+
+    #[test]
+    fn stopping_goes_back_to_the_top() {
+        let verses = vec![(1, "one".to_string())];
+        let mut session = Session::new("Psalms", 23, &verses, Sleep::Minutes(15));
+        session.play();
+        session.next();
+        session.spoke(30.0);
+        session.stop();
+        assert_eq!(session.position(), 0);
+        assert!(!session.playing());
+        assert_eq!(session.remaining(), Some(15.0 * 60.0));
     }
 
     #[test]

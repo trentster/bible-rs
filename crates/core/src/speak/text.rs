@@ -9,6 +9,8 @@
 pub struct Utterance {
     pub text: String,
     pub pause_ms: u32,
+    /// The verse this belongs to, so a session can say where it is; `None` for an announcement.
+    pub verse: Option<u8>,
 }
 
 /// A breath between verses. Long enough to separate thoughts, short enough not to feel broken.
@@ -22,13 +24,14 @@ pub fn chapter(book: &str, number: u32, verses: &[(u32, String)]) -> Vec<Utteran
     said.push(Utterance {
         text: format!("{}, chapter {}", book, words(number as u64)),
         pause_ms: ANNOUNCE_PAUSE_MS,
+        verse: None,
     });
-    for (_, text) in verses {
+    for (number, text) in verses {
         let spoken = speakable(text);
         if spoken.is_empty() {
             continue;
         }
-        said.push(Utterance { text: spoken, pause_ms: VERSE_PAUSE_MS });
+        said.push(Utterance { text: spoken, pause_ms: VERSE_PAUSE_MS, verse: Some(*number as u8) });
     }
     said
 }
