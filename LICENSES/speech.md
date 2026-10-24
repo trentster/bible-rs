@@ -9,7 +9,10 @@ The speaking voice is **not** committed to Git. `cargo run -p xtask -- fetch-spe
 | `config.json` | 0.3 MB | same |
 | `tokenizer.json` | 0.3 MB | same |
 | `default-voice.safetensors` | 0.2 MB | same |
-| `edwin.safetensors` | 0.26 MB | [gradium/phonon-voices](https://huggingface.co/gradium/phonon-voices), voice "Edwin" |
+| `russell.safetensors` | 0.26 MB | [gradium/phonon-voices](https://huggingface.co/gradium/phonon-voices), US male |
+| `spencer.safetensors` | 0.26 MB | same, UK male |
+| `harper.safetensors` | 0.26 MB | same, US female |
+| `freya.safetensors` | 0.26 MB | same, UK female |
 
 ## Licence
 
@@ -26,6 +29,9 @@ shipped inside the app bundle; the running app never makes a network request to 
 
 ## What we do to it
 
-We time-stretch the model's output to **0.80 of its own pace** (190 → 153 words per minute) with our
-own WSOLA implementation in `crates/core/src/speak/stretch.rs`. That changes timing, not the weights;
-the audio is still the model's own performance.
+We stretch each voice's output to the pace Mark approved — **152.5 words per minute of speech** —
+with our own WSOLA implementation in `crates/core/src/speak/stretch.rs`. Because the voices read at
+different native rates (177–201 wpm), each carries its own measured figure in
+`crates/core/src/speak/voices.rs` and the factor is solved per voice, so changing voice does not
+change the pace. That changes timing, not the weights; the audio is still the model's own
+performance.

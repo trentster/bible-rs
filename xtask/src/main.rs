@@ -478,9 +478,24 @@ const SPEECH: &[(&str, &str, &str)] = &[
         "f739e8c4c76ee7f92e7c94a82002748c8cd22e99582ac49f7b9b94cd63786e18",
     ),
     (
-        "edwin.safetensors",
-        "https://huggingface.co/gradium/phonon-voices/resolve/main/voices/zUCxzrOrugTSis03.safetensors",
-        "ff1d0735b8b45710462b1d1f846da040f970c6eb62c7c2f36dbfb8e5bde74f1e",
+        "russell.safetensors",
+        "https://huggingface.co/gradium/phonon-voices/resolve/main/voices/_6Aslh2DxfmnRLmP.safetensors",
+        "beae9e4030efce0a935fcb0f807dc0784d598bcaa87ad4aacb047436b1eaa411",
+    ),
+    (
+        "spencer.safetensors",
+        "https://huggingface.co/gradium/phonon-voices/resolve/main/voices/JOW0vchyswkQUMDS.safetensors",
+        "cc9ac1107b0ffce282374a19beb7bfa95847724e6b7afbac991b4ae4277d5e6d",
+    ),
+    (
+        "harper.safetensors",
+        "https://huggingface.co/gradium/phonon-voices/resolve/main/voices/4SZHfMpw-p46Ywgs.safetensors",
+        "6b3da6e2d796a20c51af892c482bd6509fb88267a221aff83c870843dee2a123",
+    ),
+    (
+        "freya.safetensors",
+        "https://huggingface.co/gradium/phonon-voices/resolve/main/voices/GgfEkEJtxZR7gnpy.safetensors",
+        "eb3cd47418349e618408c16bea7153988b3ad04b41a6033039dd474a9a4dcd23",
     ),
 ];
 
@@ -506,7 +521,11 @@ fn fetch_speech(root: &Path) -> Result<()> {
         }
         bytes += std::fs::metadata(&path)?.len();
     }
-    println!("Phonon-31m + Edwin  {:>5.1} MB → {}", bytes as f64 / 1e6, out.display());
+    let voices = SPEECH
+        .iter()
+        .filter(|(name, _, _)| name.ends_with(".safetensors") && !name.starts_with("default"))
+        .count();
+    println!("Phonon-31m + {voices} voices  {:>5.1} MB → {}", bytes as f64 / 1e6, out.display());
     Ok(())
 }
 

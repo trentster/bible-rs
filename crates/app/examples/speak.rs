@@ -23,33 +23,66 @@ fn main() -> anyhow::Result<()> {
     let out_wav = rest.iter().position(|a| a == "--out").and_then(|i| rest.get(i + 1)).cloned();
     let text = std::fs::read_to_string(&text_path).with_context(|| text_path.clone())?;
 
+    // Lines that start with a verse number become the chapter script: announcement, then verses
+    // with a breath between them. Anything else is spoken as one utterance.
+    let mut verses = Vec::new();
+    for line in text.lines() {
+        let trimmed = line.trim_start();
+        let digits: String = trimmed.chars().take_while(|c| c.is_ascii_digit()).collect();
+        let rest = trimmed[digits.len()..].trim_start();
+        if !digits.is_empty() && !rest.is_empty() {
+            verses.push((digits.parse().unwrap_or(0), rest.to_string()));
+        }
+    }
+    let book = std::env::var("SPEAK_BOOK").unwrap_or_else(|_| "Hebrews".to_string());
+    let number: u32 = std::env::var("SPEAK_CHAPTER").ok().and_then(|v| v.parse().ok()).unwrap_or(7);
+    let script = if verses.is_empty() {
+        vec![bible_core::speak::Utterance { text: text.trim().to_string(), pause_ms: 0 }]
+    } else {
+        bible_core::speak::chapter(&book, number, &verses)
+    };
+
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../data/speech");
-    let voice = dir.join("edwin.safetensors");
+    let wanted = std::env::var("SPEAK_VOICE").unwrap_or_else(|_| "Russell".to_string());
+    let voice = bible_core::speak::Voice::by_name(&wanted)
+        .unwrap_or(bible_core::speak::VOICES[0]);
+    let voice_path = dir.join(format!("{}.safetensors", voice.name.to_ascii_lowercase()));
     let dir_str = dir.to_str().context("model path is not UTF-8")?.to_string();
 
     let started = Instant::now();
     let checkpoint = Checkpoint::locate(&dir_str, ResolveOptions { quant: Quant::Q80, weights: None })?;
-    let mut tts = checkpoint.builder(Lang::En).device(DeviceKind::Cpu).add_voice("Edwin", &voice).build()?;
+    let mut tts = checkpoint
+        .builder(Lang::En)
+        .device(DeviceKind::Cpu)
+        .add_voice(voice.name, &voice_path)
+        .build()?;
     checkpoint.register_voices(&mut tts);
     let load = started.elapsed().as_secs_f64();
     let rate = tts.sample_rate();
 
-    let options = SpeechOptions::default().voice("Edwin");
+    let options = SpeechOptions::default().voice(voice.name);
+    // Each voice has its own measured rate, so switching voice does not change the pace.
+    let speed: f32 = std::env::var("SPEAK_TEMPO")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or_else(|| voice.tempo());
     let synth = Instant::now();
     let mut first = None;
-    let mut pcm = Vec::new();
-    for chunk in tts.stream_with(text.trim(), &options)? {
-        let chunk = chunk?;
-        if first.is_none() {
-            first = Some(synth.elapsed().as_secs_f64());
+    let mut pcm: Vec<f32> = Vec::new();
+    for utterance in &script {
+        let mut spoken = Vec::new();
+        for chunk in tts.stream_with(&utterance.text, &options)? {
+            let chunk = chunk?;
+            if first.is_none() {
+                first = Some(synth.elapsed().as_secs_f64());
+            }
+            spoken.extend_from_slice(&chunk);
         }
-        pcm.extend_from_slice(&chunk);
+        pcm.extend_from_slice(&bible_core::speak::stretch(&spoken, rate, speed));
+        let silence = (rate as u64 * utterance.pause_ms as u64 / 1000) as usize;
+        pcm.extend(std::iter::repeat(0.0).take(silence));
     }
     let work = synth.elapsed().as_secs_f64();
-    // 0.80 of the model's own pace: 190 wpm is brisk for scripture, 153 reads like an audiobook.
-    let speed: f32 = std::env::var("SPEAK_TEMPO").ok().and_then(|v| v.parse().ok()).unwrap_or(0.80);
-    let stretched = bible_core::speak::stretch(&pcm, rate, speed);
-    let pcm = stretched;
     let audio = pcm.len() as f64 / rate as f64;
     println!("model ready      {:.0} ms", load * 1000.0);
     println!("first audio      {:.0} ms", first.unwrap_or(f64::NAN) * 1000.0);
