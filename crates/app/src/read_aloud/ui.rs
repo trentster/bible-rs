@@ -164,11 +164,18 @@ impl Listen {
         // at which the reader's eyes want the page back. A bar waiting for a press — Ready, or
         // Paused — stays where it is, because nothing explains where it went if it slides away.
         let expanded = now < self.bar_until || !state.speaking;
-        if expanded {
-            self.pill(ui, p, area, now, &state);
-        } else {
-            self.line(ui, p, area, now, &state);
-        }
+        // The bar lives in the foreground layer: in the reader's layer a click on a button also
+        // reaches the verse underneath and selects text behind the controls.
+        egui::Area::new(egui::Id::new("read-aloud-bar"))
+            .order(egui::Order::Foreground)
+            .fixed_pos(area.min)
+            .show(ui.ctx(), |bar| {
+                if expanded {
+                    self.pill(bar, p, area, now, &state);
+                } else {
+                    self.line(bar, p, area, now, &state);
+                }
+            });
         true
     }
 
@@ -185,6 +192,9 @@ impl Listen {
         {
             self.bar_until = now + BAR_SECONDS;
         }
+        // The bar swallows clicks anywhere on itself: a press on its body should not select the
+        // verse behind it. Its buttons are registered after this, so they win over it.
+        let _ = ui.interact(rect, ui.id().with("read-aloud-pill"), Sense::click_and_drag());
         p.shadows.panel.paint(ui.painter(), rect, BAR_HEIGHT / 2.0);
         ui.painter().rect_filled(rect, BAR_HEIGHT / 2.0, p.paper);
         ui.painter().rect_stroke(
