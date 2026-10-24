@@ -5,6 +5,9 @@
 //! beside the app and every sample is made on this machine.
 
 mod player;
+mod reading;
+
+pub use reading::{Reading, ReadingState};
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -39,7 +42,7 @@ fn voice_path(dir: &PathBuf, voice: Voice) -> PathBuf {
 }
 
 /// Loads the model once, with every shipped voice registered, and keeps the samples it has made.
-struct Engine {
+pub(super) struct Engine {
     tts: Synth,
     rate: u32,
     samples: HashMap<&'static str, Arc<Vec<f32>>>,
@@ -73,25 +76,34 @@ pub fn sample(voice: Voice) -> Result<Arc<Vec<f32>>, String> {
     if let Some(pcm) = engine.samples.get(voice.name) {
         return Ok(pcm.clone());
     }
-    let options = SpeechOptions::default().voice(voice.name);
-    let mut pcm = Vec::new();
-    let stream = engine
-        .tts
-        .stream_with(SAMPLE, &options)
-        .map_err(|e| format!("the voice could not speak: {e}"))?;
-    for chunk in stream {
-        pcm.extend_from_slice(&chunk.map_err(|e| format!("the voice stopped early: {e}"))?);
-    }
-    let pcm = Arc::new(bible_core::speak::stretch(&pcm, engine.rate, voice.tempo()));
+    let pcm = engine.speak(SAMPLE, voice)?;
     engine.samples.insert(voice.name, pcm.clone());
     Ok(pcm)
+}
+
+impl Engine {
+    /// Speech for `text` in `voice`, at the approved pace. Blocking; a verse takes about a fifth of
+    /// a second to make, which is why playback runs on its own thread.
+    fn speak(&mut self, text: &str, voice: Voice) -> Result<Arc<Vec<f32>>, String> {
+        let options = SpeechOptions::default().voice(voice.name);
+        let mut pcm = Vec::new();
+        let stream = self
+            .tts
+            .stream_with(text, &options)
+            .map_err(|e| format!("the voice could not speak: {e}"))?;
+        for chunk in stream {
+            pcm.extend_from_slice(&chunk.map_err(|e| format!("the voice stopped early: {e}"))?);
+        }
+        Ok(Arc::new(bible_core::speak::stretch(&pcm, self.rate, voice.tempo())))
+    }
 }
 
 /// Says the sample through the default output device, off the UI thread.
 pub fn play_sample(voice: Voice) {
     std::thread::spawn(move || match sample(voice) {
         Ok(pcm) => {
-            if let Err(e) = player::play(&pcm, 24_000) {
+            let controls = Arc::new(player::Controls::default());
+            if let Err(e) = player::play(&pcm, 24_000, &controls) {
                 eprintln!("read aloud: {e}");
             }
         }
@@ -102,5 +114,7 @@ pub fn play_sample(voice: Voice) {
 /// Plays 24 kHz mono audio through the default output device, blocking until it has. The Settings
 /// button uses `play_sample`; this exists so a check can prove the device path without a mouse.
 pub fn play_for_test(pcm: &[f32]) -> Result<(), String> {
-    player::play(pcm, 24_000)
+    let pcm = Arc::new(pcm.to_vec());
+    let controls = Arc::new(player::Controls::default());
+    player::play(&pcm, 24_000, &controls).map(|_| ())
 }
