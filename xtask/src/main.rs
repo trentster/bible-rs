@@ -213,6 +213,7 @@ fn main() -> Result<()> {
         }
         Some("build-lexicon") => build_lexicon(&root, &args[1..]),
         Some("build-wordnet") => build_wordnet(&root),
+        Some("fetch-speech") => fetch_speech(&root),
         Some("fetch") => {
             for s in selected(&args[1..]) {
                 fetch(&root, s)?;
@@ -221,7 +222,7 @@ fn main() -> Result<()> {
         }
         _ => {
             eprintln!(
-                "usage: cargo run -p xtask -- build-data [ids…] | build-lexicon [ids…] | build-wordnet | fetch [ids…]"
+                "usage: cargo run -p xtask -- build-data [ids…] | build-lexicon [ids…] | build-wordnet | fetch-speech | fetch [ids…]"
             );
             std::process::exit(2)
         }
@@ -450,6 +451,62 @@ fn build_wordnet(root: &Path) -> Result<()> {
         lexicon.len() as f64 / 1e6,
         out.join("wordnet.tsv").display()
     );
+    Ok(())
+}
+
+/// Phonon-31m, the Read Aloud voice: 31M parameters, q8_0, Apache-2.0 weights and runtime, and no
+/// phonemizer anywhere. Fetched rather than committed — 62 MB in Git history is not worth it.
+const SPEECH: &[(&str, &str, &str)] = &[
+    (
+        "model.q8.gguf",
+        "https://huggingface.co/gradium/phonon-31m-en/resolve/main/model.q8.gguf",
+        "a7d9aad2cd6dc66473f24a08bc6d2939030ef4d751ef82349361fbef3272dbae",
+    ),
+    (
+        "config.json",
+        "https://huggingface.co/gradium/phonon-31m-en/resolve/main/config.json",
+        "7062ea376e6b158543c8abec8e5af67df171c49ad70eb7e2a0fb25c16f265e06",
+    ),
+    (
+        "tokenizer.json",
+        "https://huggingface.co/gradium/phonon-31m-en/resolve/main/tokenizer.json",
+        "691a00068fa7b989f2f3e5ae5daa2d1a5bb319f2d5360deafcfb19a8bb6e7936",
+    ),
+    (
+        "default-voice.safetensors",
+        "https://huggingface.co/gradium/phonon-31m-en/resolve/main/default-voice.safetensors",
+        "f739e8c4c76ee7f92e7c94a82002748c8cd22e99582ac49f7b9b94cd63786e18",
+    ),
+    (
+        "edwin.safetensors",
+        "https://huggingface.co/gradium/phonon-voices/resolve/main/voices/zUCxzrOrugTSis03.safetensors",
+        "ff1d0735b8b45710462b1d1f846da040f970c6eb62c7c2f36dbfb8e5bde74f1e",
+    ),
+];
+
+fn fetch_speech(root: &Path) -> Result<()> {
+    let out = root.join("data/speech");
+    std::fs::create_dir_all(&out)?;
+    let mut bytes = 0u64;
+    for (name, url, sha) in SPEECH {
+        let path = out.join(name);
+        let digest = if path.exists() { hex(&Sha256::digest(std::fs::read(&path)?)) } else { String::new() };
+        if digest != *sha {
+            eprintln!("downloading {name}");
+            let status = Command::new("curl").args(["-fsSL", "-o"]).arg(&path).arg(url).status()?;
+            if !status.success() {
+                bail!("download failed: {url}");
+            }
+            let got = hex(&Sha256::digest(std::fs::read(&path)?));
+            if got != *sha {
+                bail!(
+                    "{name} sha256 mismatch: expected {sha}, got {got}. Review the release, then \n                     update the pin."
+                );
+            }
+        }
+        bytes += std::fs::metadata(&path)?.len();
+    }
+    println!("Phonon-31m + Edwin  {:>5.1} MB → {}", bytes as f64 / 1e6, out.display());
     Ok(())
 }
 

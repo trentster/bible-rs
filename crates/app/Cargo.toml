@@ -14,6 +14,15 @@ path = "src/lib.rs"
 name = "bible-rs"
 path = "src/main.rs"
 
+[features]
+# Read Aloud: the on-device voice. Optional so the default build carries neither the dependency nor
+# the 62 MB of model weights.
+speak = ["dep:ptts", "dep:cpal"]
+
+[[example]]
+name = "speak"
+required-features = ["speak"]
+
 [dependencies]
 bible-core.workspace = true
 anyhow.workspace = true
@@ -32,6 +41,10 @@ dirs = "6"
 
 # PNG encoding for shared verse images.
 image = { version = "0.25", default-features = false, features = ["png"] }
+
+# Read Aloud (optional, `--features speak`).
+ptts = { version = "0.4", optional = true, features = ["hf"] }
+cpal = { version = "0.15", optional = true }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

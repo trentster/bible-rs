@@ -1,5 +1,8 @@
 /target
 /dist
 /.sources
+# The speech model: 62 MB of Apache-2.0 weights, pinned and fetched by `xtask fetch-speech` rather
+# than committed, exactly as .sources holds the dictionary archives.
+/data/speech
 *.dmg
 .DS_Store

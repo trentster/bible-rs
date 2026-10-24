@@ -21,6 +21,7 @@ pub mod reference;
 pub mod search;
 #[cfg(feature = "native")]
 pub mod secrets;
+pub mod speak;
 pub mod study;
 pub mod sync;
 pub mod usfm;
