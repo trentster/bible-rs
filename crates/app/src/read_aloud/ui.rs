@@ -32,6 +32,10 @@ pub struct Listen {
     /// When the floating bar gives way to the status line, on the app's clock.
     bar_until: f64,
     timer_open: bool,
+    /// Where the stopwatch was drawn last frame, so a press on it does not close its own menu.
+    timer_anchor: Rect,
+    /// Where the menu was drawn, for telling a press inside it from one outside.
+    menu_rect: Rect,
     /// A state painted without any sound, so the bar can be photographed in the harness.
     preview: Option<ReadingState>,
 }
@@ -44,6 +48,8 @@ impl Listen {
             voice: String::new(),
             bar_until: 0.0,
             timer_open: false,
+            timer_anchor: Rect::NOTHING,
+            menu_rect: Rect::NOTHING,
             preview: None,
         }
     }
@@ -362,6 +368,7 @@ impl Listen {
             Pos2::new(group_left, cy - 15.0),
             Pos2::new(group_right, cy + 15.0),
         );
+        self.timer_anchor = group;
         let timer = ui.interact(group, ui.id().with("read-aloud-timer"), Sense::click());
         if timer.hovered() || self.timer_open {
             ui.painter().rect_filled(group, 9.0, p.fill_strong);
@@ -429,6 +436,17 @@ impl Listen {
 
     /// The five ways the reading can end itself.
     fn timer_menu(&mut self, ui: &mut Ui, p: &Palette, anchor: Rect, now: f64) {
+        // A menu closes when the reader presses anywhere else, or presses Escape. The stopwatch
+        // itself is excluded: it toggles the menu, and closing it here would fight that.
+        let outside = ui
+            .ctx()
+            .pointer_latest_pos()
+            .is_some_and(|pt| !self.menu_rect.contains(pt) && !self.timer_anchor.contains(pt));
+        let pressed = ui.ctx().input(|i| i.pointer.any_pressed());
+        if ui.input(|i| i.key_pressed(egui::Key::Escape)) || (pressed && outside) {
+            self.timer_open = false;
+            return;
+        }
         let choices = [
             Sleep::Minutes(15),
             Sleep::Minutes(30),
@@ -443,6 +461,7 @@ impl Listen {
             Pos2::new(anchor.right() - INSET - width, anchor.top() - height - 8.0),
             Vec2::new(width, height),
         );
+        self.menu_rect = rect;
         p.shadows.popover.paint(ui.painter(), rect, 12.0);
         ui.painter().rect_filled(rect, 12.0, p.paper);
         ui.painter().rect_stroke(rect, 12.0, Stroke::new(0.5, p.border), egui::StrokeKind::Inside);
