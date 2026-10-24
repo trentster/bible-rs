@@ -7,7 +7,9 @@ mod voices;
 
 pub use session::{Session, Sleep};
 pub use stretch::stretch;
-pub use text::{chapter, speakable, words, Utterance, ANNOUNCE_PAUSE_MS, VERSE_PAUSE_MS};
+pub use text::{
+    chapter, speakable, words, Utterance, ANNOUNCE_PAUSE_MS, CONTINUE_PAUSE_MS, VERSE_PAUSE_MS,
+};
 pub use voices::{Accent, Voice, SPEECH_WPM, VOICES};
 
 #[cfg(test)]
@@ -83,6 +85,119 @@ mod tests {
         let script = chapter("Hebrews", 7, &verses);
         assert_eq!(script.len(), 2);
         assert_eq!(script[1].text, "To whom also");
+    }
+
+    #[test]
+    #[ignore]
+    fn measure_run_on_verses() {
+        use crate::books::{BookId, ChapterIdx};
+        for id in ["kjv", "web", "asv"] {
+            let t = crate::bundled::load(id).unwrap();
+            let (mut run_on, mut total) = (0u32, 0u32);
+            for book in BookId::all() {
+                for ch in 1..=book.chapters() {
+                    let Some(c) = ChapterIdx::new(book, ch) else { continue };
+                    for verse in t.verses_in(c) {
+                        total += 1;
+                        if super::text::runs_on(&verse.text) {
+                            run_on += 1;
+                        }
+                    }
+                }
+            }
+            println!(
+                "{id}: {run_on}/{total} verses run on = {:.1}%",
+                100.0 * run_on as f32 / total as f32
+            );
+            if id == "kjv" {
+                let mut chains: Vec<(usize, usize)> = Vec::new(); // (verses, words)
+                for book in BookId::all() {
+                    for ch in 1..=book.chapters() {
+                        let Some(c) = ChapterIdx::new(book, ch) else { continue };
+                        let (mut nv, mut nw) = (0usize, 0usize);
+                        for verse in t.verses_in(c) {
+                            nv += 1;
+                            nw += verse.text.split_whitespace().count();
+                            if !super::text::runs_on(&verse.text) {
+                                chains.push((nv, nw));
+                                nv = 0;
+                                nw = 0;
+                            }
+                        }
+                        if nv > 0 { chains.push((nv, nw)); }
+                    }
+                }
+                let over3 = chains.iter().filter(|c| c.0 > 3).count();
+                let over5 = chains.iter().filter(|c| c.0 > 5).count();
+                let longest = chains.iter().max().unwrap();
+                let words = |limit: usize| chains.iter().filter(|c| c.1 > limit).count();
+                println!(
+                    "sentences {} | over 3 verses {} ({:.1}%) | over 5 verses {} ({:.1}%) | longest {} verses, {} words | over 60 words {} | over 100 words {}",
+                    chains.len(),
+                    over3,
+                    100.0 * over3 as f32 / chains.len() as f32,
+                    over5,
+                    100.0 * over5 as f32 / chains.len() as f32,
+                    longest.0,
+                    longest.1,
+                    words(60),
+                    words(100)
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_sentence_that_crosses_a_verse_number_is_read_straight_through() {
+        let verses = vec![
+            (12, "Now when Jesus had heard that John was cast into prison, he departed into Galilee;".to_string()),
+            (13, "And leaving Nazareth, he came and dwelt in Capernaum.".to_string()),
+        ];
+        let script = chapter("Matthew", 4, &verses);
+        assert_eq!(script.len(), 2, "the announcement, then one sentence");
+        assert_eq!(
+            script[1].text,
+            "Now when Jesus had heard that John was cast into prison, he departed into Galilee; And leaving Nazareth, he came and dwelt in Capernaum."
+        );
+        assert_eq!(script[1].verse, Some(12), "the verse it starts in says where the narrator is");
+    }
+
+    #[test]
+    fn a_verse_that_ends_its_sentence_still_gets_its_breath() {
+        let verses = vec![
+            (1, "The first thing.".to_string()),
+            (2, "A clause that runs on;".to_string()),
+            (3, "and the sentence closes.".to_string()),
+        ];
+        let script = chapter("Psalms", 23, &verses);
+        assert_eq!(script.len(), 3);
+        assert_eq!(script[1].text, "The first thing.");
+        assert_eq!(script[1].pause_ms, VERSE_PAUSE_MS);
+        assert_eq!(script[2].text, "A clause that runs on; and the sentence closes.");
+        assert_eq!(script[2].verse, Some(2));
+    }
+
+    #[test]
+    fn a_sentence_too_long_to_hold_is_broken_with_a_clause_breath() {
+        let verse = |n: u8| (n, format!("clause number {n} carries on;"));
+        let verses: Vec<(u32, String)> = (1..=5u8).map(|n| { let (n, t) = verse(n); (n as u32, t) }).collect();
+        let script = chapter("Hebrews", 7, &verses);
+        assert_eq!(script.len(), 3, "the announcement, three verses, then the last two");
+        assert_eq!(script[1].verse, Some(1));
+        assert_eq!(script[1].pause_ms, CONTINUE_PAUSE_MS, "cut short, so a clause breath");
+        assert!(script[1].text.ends_with(';'));
+        assert_eq!(script[2].verse, Some(4), "the narrator's position follows the break");
+    }
+
+    #[test]
+    fn a_closing_quote_does_not_hide_the_colon() {
+        let verses = vec![
+            (1, "\u{201c}He said unto them:".to_string()),
+            (2, "Follow me.".to_string()),
+        ];
+        let script = chapter("Matthew", 4, &verses);
+        assert_eq!(script.len(), 2);
+        assert_eq!(script[1].verse, Some(1));
     }
 
     #[test]
