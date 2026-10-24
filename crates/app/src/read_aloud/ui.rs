@@ -318,34 +318,10 @@ impl Listen {
             );
         }
 
-        // The sleep timer, and then the close.
-        let moon_center = if floating {
-            Pos2::new(rect.right() - 92.0, cy)
-        } else {
-            Pos2::new(rect.right() - INSET - 78.0, cy)
-        };
-        let moon_rect = Rect::from_center_size(moon_center, Vec2::splat(34.0));
-        let moon = ui.interact(moon_rect, ui.id().with("read-aloud-timer"), Sense::click());
-        if moon.hovered() || self.timer_open {
-            ui.painter().circle_filled(moon_rect.center(), 16.0, p.fill_strong);
-        }
-        timer_icon(ui.painter(), moon_rect, if self.timer_open { p.accent_quiet } else { p.ink_2 });
-        if moon.clicked() {
-            self.timer_open = !self.timer_open;
-            self.touched(now);
-        }
-        ui.painter().text(
-            Pos2::new(moon_rect.right() + 2.0, cy),
-            Align2::LEFT_CENTER,
-            self.clock_text(state),
-            FontId::proportional(12.0),
-            p.ink_2,
-        );
-
-        let close_rect = Rect::from_center_size(
-            Pos2::new(rect.right() - INSET - 14.0, cy),
-            Vec2::splat(28.0),
-        );
+        // From the right: the close, a gap, then the time and the stopwatch that sets it. Laying
+        // them out from the right keeps the countdown clear of the X however wide it gets.
+        let close_rect =
+            Rect::from_center_size(Pos2::new(rect.right() - INSET - 14.0, cy), Vec2::splat(28.0));
         let close = ui.interact(close_rect, ui.id().with("read-aloud-close"), Sense::click());
         if close.hovered() {
             ui.painter().circle_filled(close_rect.center(), 14.0, p.fill_strong);
@@ -353,6 +329,34 @@ impl Listen {
         close_icon(ui.painter(), close_rect, p.ink_2);
         if close.clicked() {
             self.stop();
+        }
+
+        let clock = self.clock_text(state);
+        let clock_width =
+            ui.painter().layout_no_wrap(clock.clone(), FontId::proportional(12.0), p.ink_2).size().x;
+        let clock_left = close_rect.left() - 20.0 - clock_width;
+        ui.painter().text(
+            Pos2::new(clock_left, cy),
+            Align2::LEFT_CENTER,
+            clock,
+            FontId::proportional(12.0),
+            p.ink_2,
+        );
+
+        let timer_rect =
+            Rect::from_center_size(Pos2::new(clock_left - 16.0, cy), Vec2::splat(30.0));
+        let timer = ui.interact(timer_rect, ui.id().with("read-aloud-timer"), Sense::click());
+        if timer.hovered() || self.timer_open {
+            ui.painter().circle_filled(timer_rect.center(), 14.0, p.fill_strong);
+        }
+        stopwatch_icon(
+            ui.painter(),
+            timer_rect,
+            if self.timer_open { p.accent_quiet } else { p.ink_2 },
+        );
+        if timer.clicked() {
+            self.timer_open = !self.timer_open;
+            self.touched(now);
         }
     }
 }
@@ -468,17 +472,21 @@ fn clock(seconds: f32) -> String {
     }
 }
 
-/// An hourglass: the sleep timer's shape, which reads at 14 pt where a crescent did not.
-fn timer_icon(painter: &egui::Painter, rect: Rect, color: Color32) {
-    let r = Rect::from_center_size(rect.center(), Vec2::splat(11.0));
+/// A stopwatch: circle, two hands, a crown. Unmistakable at 14 pt, unlike an hourglass.
+fn stopwatch_icon(painter: &egui::Painter, rect: Rect, color: Color32) {
     let stroke = Stroke::new(1.3, color);
-    painter.hline(r.x_range(), r.top(), stroke);
-    painter.hline(r.x_range(), r.bottom(), stroke);
-    let c = r.center();
-    painter.line_segment([r.left_top(), c], stroke);
-    painter.line_segment([r.right_top(), c], stroke);
-    painter.line_segment([r.left_bottom(), c], stroke);
-    painter.line_segment([r.right_bottom(), c], stroke);
+    let c = Pos2::new(rect.center().x, rect.center().y + 1.2);
+    let r = 5.3;
+    painter.circle_stroke(c, r, stroke);
+    // The hands, at twelve and four.
+    painter.line_segment([c, Pos2::new(c.x, c.y - 3.4)], stroke);
+    painter.line_segment([c, Pos2::new(c.x + 2.5, c.y + 0.4)], stroke);
+    // The crown on top.
+    painter.line_segment([Pos2::new(c.x, c.y - r - 2.4), Pos2::new(c.x, c.y - r)], stroke);
+    painter.line_segment(
+        [Pos2::new(c.x - 2.2, c.y - r - 2.4), Pos2::new(c.x + 2.2, c.y - r - 2.4)],
+        stroke,
+    );
 }
 
 fn close_icon(painter: &egui::Painter, rect: Rect, color: Color32) {
