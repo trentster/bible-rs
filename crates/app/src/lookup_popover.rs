@@ -225,6 +225,17 @@ impl LookUp {
     }
 }
 
+/// Starts unpacking the bundled dictionaries on a background thread, so the first lookup finds the
+/// index already built instead of stalling on 13 MB of decompression. Called when the verse menu
+/// opens with a word to look up: a reader who never looks anything up never pays for it, and one
+/// thread per app is enough, so later menu opens are free.
+pub fn warm_dictionary() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        std::thread::spawn(|| bible_core::lexicon::warm());
+    });
+}
+
 /// A Wiktionary search for a word — the one case where neither dictionary has it. The URL is handed
 /// to the reader's browser; the app never makes a network request of its own.
 fn wiktionary_url(word: &str) -> String {

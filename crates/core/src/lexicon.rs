@@ -400,10 +400,29 @@ mod bundled {
     pub fn headwords() -> usize {
         wordnet().len() + easton().len()
     }
+    /// Unpacks and indexes every bundled table, so the first lookup does not pay for it. Safe to
+    /// call from any thread; after the first call it costs a few atomic reads.
+    pub fn warm() {
+        let _ = aliases();
+        let _ = forms();
+        let _ = wordnet();
+        let _ = easton();
+    }
 }
 
 #[cfg(feature = "bundled")]
-pub use bundled::{aliases, define, headwords, Alias, Definition};
+pub use bundled::{aliases, define, headwords, warm, Alias, Definition};
+
+#[cfg(feature = "bundled")]
+#[test]
+fn warming_the_dictionary_ahead_of_time_answers_the_same() {
+    // The app warms on a background thread when a verse menu opens; the answer must not depend on
+    // who got there first.
+    warm();
+    let feast = define("feast");
+    assert_eq!(feast.entries[0].source, Source::Wordnet);
+    assert!(!define("Melchisedec").is_empty());
+}
 
 #[cfg(feature = "bundled")]
 #[test]

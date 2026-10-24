@@ -863,6 +863,12 @@ impl BibleApp {
                         &self.settings,
                         pos,
                     );
+                    // Warm the dictionary off the main thread, so the first lookup finds the index
+                    // built. Only when there is a word to look up: a menu without a Look Up item
+                    // costs nothing.
+                    if word.is_some() {
+                        crate::lookup_popover::warm_dictionary();
+                    }
                     self.verse_menu = Some(crate::verse_menu::VerseMenu::new(pos, word));
                 }
             }
