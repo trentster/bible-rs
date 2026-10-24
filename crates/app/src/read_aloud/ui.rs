@@ -135,11 +135,8 @@ impl Listen {
             return false;
         }
         let state = self.state();
-        if state.finished && self.preview.is_none() {
-            self.reading = None;
-            return false;
-        }
-        // The voice would not start: say why, then get out of the way.
+        // A failure is worth saying even though the reading has already stopped: silence would read
+        // as a dead button.
         if let Some(note) = &state.note {
             let text = format!("Read aloud: {note}");
             let rect = Rect::from_min_size(
@@ -154,6 +151,13 @@ impl Listen {
                 FontId::proportional(12.0),
                 p.ink_2,
             );
+            if state.finished {
+                self.reading = None;
+            }
+            return false;
+        }
+        if state.finished && self.preview.is_none() {
+            self.reading = None;
             return false;
         }
         let expanded = now < self.bar_until;

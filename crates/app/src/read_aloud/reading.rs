@@ -37,7 +37,10 @@ pub struct Reading {
 
 impl Reading {
     /// Starts speaking `session` in `voice` on its own thread.
-    pub fn start(session: Session, voice: Voice) -> Reading {
+    pub fn start(mut session: Session, voice: Voice) -> Reading {
+        // A reading that has been started is a reading that is playing: the session hands out
+        // nothing until it is.
+        session.play();
         let controls = Arc::new(Controls::default());
         let session = Arc::new(Mutex::new(session));
         let state = Arc::new(Mutex::new(ReadingState::default()));
