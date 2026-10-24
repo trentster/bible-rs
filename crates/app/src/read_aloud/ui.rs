@@ -27,8 +27,6 @@ pub struct Listen {
     reading: Option<Reading>,
     /// "Psalms 23" — what the bar calls the chapter.
     label: String,
-    /// The voice speaking, for the second line of the pill.
-    voice: String,
     /// When the floating bar gives way to the status line, on the app's clock.
     bar_until: f64,
     timer_open: bool,
@@ -47,7 +45,6 @@ impl Listen {
         Listen {
             reading: None,
             label: String::new(),
-            voice: String::new(),
             bar_until: 0.0,
             timer_open: false,
             timer_anchor: Rect::NOTHING,
@@ -80,7 +77,6 @@ impl Listen {
         self.stop();
         self.preview = None;
         self.label = label.into();
-        self.voice = voice.name.to_string();
         self.reading = Some(Reading::open(session, voice));
         self.preview_left = None;
         self.touched(now);
@@ -341,7 +337,7 @@ impl Listen {
             ui.painter().text(
                 Pos2::new(rect.left() + 58.0, cy + 8.0),
                 Align2::LEFT_CENTER,
-                self.listening_text(state),
+                Self::listening_text(state),
                 FontId::proportional(10.5),
                 p.ink_2,
             );
@@ -408,20 +404,14 @@ impl Listen {
 }
 
 impl Listen {
-    /// "Listening · Spencer", "Paused · Spencer" or "Ready · Spencer": what is actually happening,
-    /// because a bar that says Listening while silent is a lie.
-    fn listening_text(&self, state: &ReadingState) -> String {
-        let verb = if state.speaking {
-            "Listening"
-        } else if state.verse.is_some() {
-            "Paused"
-        } else {
-            "Ready"
-        };
-        if self.voice.is_empty() {
-            verb.to_string()
-        } else {
-            format!("{verb} · {}", self.voice)
+    /// "Listening", "Paused" or "Ready": what is actually happening, because a bar that says
+    /// Listening while silent is a lie. The voice is not named here — it is set in Settings, and
+    /// repeating it beside the reader's own reading is one more thing to read and nothing more.
+    fn listening_text(state: &ReadingState) -> String {
+        match (state.speaking, state.verse) {
+            (true, _) => "Listening".to_string(),
+            (false, Some(_)) => "Paused".to_string(),
+            (false, None) => "Ready".to_string(),
         }
     }
 
