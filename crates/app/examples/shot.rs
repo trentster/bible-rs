@@ -55,8 +55,13 @@ fn main() {
         Startup { t0: Instant::now(), probe: false, init: Duration::ZERO, first_ui: None, frames: 0 };
     let filmstrip: Option<usize> = std::env::var("BIBLE_RS_SHOT_FILMSTRIP").ok().and_then(|s| s.parse().ok());
     let mut builder = Harness::builder().with_size(egui::vec2(w, h)).with_pixels_per_point(2.0);
-    if filmstrip.is_some() {
-        builder = builder.with_step_dt(1.0 / 120.0);
+    // The default simulated frame is 250 ms, which puts two clicks seconds apart and outside
+    // egui's double-click window: a script that clicks twice needs a faster clock.
+    // Any script gated on click timing (double-click, momentum drags) silently does nothing at
+    // the default rate — that is a harness artefact, not a regression. Set BIBLE_RS_SHOT_STEP_DT.
+    let step_dt: Option<f32> = std::env::var("BIBLE_RS_SHOT_STEP_DT").ok().and_then(|s| s.parse().ok());
+    if filmstrip.is_some() || step_dt.is_some() {
+        builder = builder.with_step_dt(step_dt.unwrap_or(1.0 / 120.0));
     }
     let mut harness = builder.wgpu().build_eframe(|cc| {
         cc.egui_ctx.set_fonts(theme::font_definitions());
@@ -247,6 +252,16 @@ fn run_step(harness: &mut Harness<'_, BibleApp>, step: &str) {
                     harness.run_steps(4);
                 }
             }
+        }
+        // Two clicks in quick succession: what opens the note editor on a verse.
+        "double-click" => {
+            let Some(p) = resolve(harness, arg) else {
+                eprintln!("BIBLE_RS_SHOT_SCRIPT: {step:?} isn't on screen");
+                return;
+            };
+            eprintln!("{step} → double-click:{}", at(p));
+            press(harness, p, egui::PointerButton::Primary, egui::Modifiers::NONE);
+            press(harness, p, egui::PointerButton::Primary, egui::Modifiers::NONE);
         }
         "drag" => {
             let ends =

@@ -1,5 +1,13 @@
 # bible-rs: notes for agents
 
+## Tests and screenshots
+
+- Offscreen screenshots and scripted interaction use `crates/app/examples/shot.rs`
+  (`BIBLE_RS_SHOT_SCRIPT`, `BIBLE_RS_SHOT_STEP_DT`). No screen-recording permission needed.
+- `egui_kittest` simulates one frame every **250 ms** by default, so anything gated on click
+  timing — double-click, drag momentum — is a silent false negative unless `BIBLE_RS_SHOT_STEP_DT`
+  is set (try `0.016`). Before calling such a failure a regression, re-run with a realistic clock.
+
 ## Licensing
 
 - Code is MIT ([LICENSE](LICENSE)), wherever it lives.
