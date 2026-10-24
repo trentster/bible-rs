@@ -36,6 +36,20 @@ every source above; copies of those statements are reproduced in [`bibles.md`](b
   text, no derived index, no test fixtures. They can be imported from a file the user owns or
   fetched with the user's own API key (see the README).
 
+## Bundled dictionaries — public domain
+
+Converted at build time from the CrossWire modules by `cargo run -p xtask -- build-lexicon`, each
+archive pinned by SHA-256 in `xtask/src/main.rs`. The lookup reads only the plain text the
+conversion writes. Terms, verbatim licence statements and the archive hashes are in
+[`dictionaries.md`](dictionaries.md).
+
+| Id | Dictionary | Source | Status | Notes |
+|---|---|---|---|---|
+| `easton` | Easton's Bible Dictionary (1897) | CrossWire `Easton.zip`, text from CCEL | Public domain | M. G. Easton died in 1894; the module states `DistributionLicense=Public Domain`. Bible words, names and places — not ordinary English. |
+
+The spelling table in `data/lexicon/aliases.tsv` is the project's own editorial data (see
+`dictionaries.md`), not part of any dictionary.
+
 ## Fonts — SIL Open Font License 1.1
 
 | Font | Use | Source | Licence |

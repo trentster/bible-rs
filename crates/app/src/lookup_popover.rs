@@ -50,10 +50,47 @@ impl LookUp {
         Some(Self::new(word, at.verse.to_string()))
     }
 
-    /// The popover's lines under the heading. The dictionaries fill this in next; until then it
-    /// says so plainly rather than showing an empty frame.
-    fn body(&self) -> Vec<(String, bool)> {
-        vec![("No definition yet".to_string(), false)]
+    /// The popover's body: the paragraphs to scroll, and the dictionary line pinned at its foot.
+    ///
+    /// This is where the bundled dictionary is first parsed, so nothing is read until a word is
+    /// actually asked about — the startup path never touches it.
+    fn body(&self) -> (Vec<(String, bool)>, Option<String>) {
+        let found = bible_core::lexicon::define(&self.word);
+        if found.is_empty() {
+            return (
+                vec![(
+                    format!(
+                        "No entry for “{}” in {}.",
+                        self.word,
+                        bible_core::lexicon::Source::Easton.label()
+                    ),
+                    false,
+                )],
+                None,
+            );
+        }
+        let mut lines = Vec::new();
+        // The KJV's spelling is not always Easton's headword, and the reader deserves to know why
+        // they are being shown a different word.
+        if let Some(headword) = &found.shown_as {
+            lines.push((format!("“{}” — shown as {}", self.word, headword), true));
+        }
+        // With one dictionary in the box its name is pinned at the foot; with several, each entry
+        // carries its own line, so it is never ambiguous which said what.
+        let one_source = found.entries.iter().all(|e| e.source == found.entries[0].source);
+        let mut pinned = None;
+        for entry in &found.entries {
+            if one_source {
+                pinned = Some(entry.source.label().to_string());
+            }
+            for paragraph in entry.body.split('\n').filter(|p| !p.trim().is_empty()) {
+                lines.push((paragraph.trim().to_string(), false));
+            }
+            if !one_source {
+                lines.push((entry.source.label().to_string(), true));
+            }
+        }
+        (lines, pinned)
     }
 
     /// Draws the popover hanging from the looked-up words; returns `true` to close.
@@ -63,9 +100,34 @@ impl LookUp {
         }
         let screen = ctx.content_rect();
         let anchor = anchor(reader).unwrap_or_else(|| crate::note_popover::fallback_anchor(screen));
-        let body = self.body();
-        let chrome = 64.5 + 14.0 + 16.0;
-        let height = chrome + body.len() as f32 * 18.0;
+        let (body, pinned) = self.body();
+        // A dictionary line pinned at the foot takes its own strip, whatever the entry's length.
+        let foot = if pinned.is_some() { 30.0 } else { 0.0 };
+        // Wrapped text, so a long entry is measured rather than counted in fixed-height lines.
+        let wrap = WIDTH - 32.0;
+        let measured: Vec<(std::sync::Arc<egui::Galley>, bool)> = body
+            .iter()
+            .map(|(line, is_source)| {
+                let font = if *is_source { theme::ui_font(11.5) } else { theme::ui_font(13.0) };
+                (ctx.fonts_mut(|f| f.layout(line.clone(), font, p.ink, wrap)), *is_source)
+            })
+            .collect();
+        let mut text_height = 0.0;
+        for (i, (galley, is_source)) in measured.iter().enumerate() {
+            if *is_source {
+                text_height += 4.0;
+            }
+            text_height += galley.size().y + 4.0;
+            let next_starts_an_entry = measured.get(i + 1).is_some_and(|(_, next)| !*next);
+            if *is_source && next_starts_an_entry {
+                text_height += 10.0;
+            }
+        }
+        // A long entry scrolls rather than growing the popover off the screen.
+        let cap = (screen.height() * 0.42).max(80.0);
+        let body_height = text_height.min(cap);
+        let chrome = 64.5 + 14.0 + 14.0 + foot;
+        let height = chrome + body_height;
 
         let below = screen.bottom() - (anchor.bottom() + 3.0 + BEAK.y) - 16.0;
         let above = anchor.top() - 3.0 - BEAK.y - (screen.top() + 52.0) - 8.0;
@@ -104,11 +166,32 @@ impl LookUp {
                 }
                 painter.hline(rect.x_range(), rect.top() + 64.5, Stroke::new(1.0, p.separator));
 
-                let mut y = rect.top() + 64.5 + 14.0;
-                for (line, is_body) in &body {
-                    let (font, color) = if *is_body { (theme::ui_font(13.0), p.ink) } else { (theme::ui_font(11.5), p.ink_2) };
-                    text(&painter, x, y, if *is_body { 13.0 } else { 11.5 }, line, font, color, false);
-                    y += 18.0;
+                let body_rect = Rect::from_min_max(
+                    pos2(rect.left() + 16.0, rect.top() + 64.5 + 12.0),
+                    pos2(rect.right() - 16.0, rect.bottom() - 14.0 - foot),
+                );
+                let mut child = ui.new_child(egui::UiBuilder::new().max_rect(body_rect));
+                child.set_clip_rect(body_rect.intersect(ctx.content_rect()));
+                child.spacing_mut().item_spacing.y = 4.0;
+                egui::ScrollArea::vertical().auto_shrink([false, false]).show(&mut child, |ui| {
+                    for (galley, is_source) in &measured {
+                        if *is_source {
+                            ui.add_space(0.0);
+                            let text = egui::WidgetText::Galley(galley.clone());
+                            ui.add(egui::Label::new(text.color(p.ink_2)).wrap());
+                            ui.add_space(10.0);
+                        } else {
+                            let text = egui::WidgetText::Galley(galley.clone());
+                            ui.add(egui::Label::new(text).wrap());
+                        }
+                    }
+                });
+                // The dictionary's name sits at the foot, so a long entry scrolling past does not
+                // take the provenance with it.
+                if let Some(label) = &pinned {
+                    let line_y = rect.bottom() - 24.0;
+                    painter.hline(rect.x_range(), line_y, Stroke::new(1.0, p.separator));
+                    text(&painter, x, line_y + 8.0, 11.5, label, theme::ui_font(11.5), p.ink_2, false);
                 }
             });
         // A click anywhere outside closes it, as the note popover already behaves.

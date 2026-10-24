@@ -1,0 +1,21 @@
+#bible-rs-aliases v1
+# Spellings the King James text uses that Easton's files under another headword.
+#
+# Each line: the spelling as the KJV prints it, the headword Easton's files it under, and one verse
+# where the KJV uses that spelling (a test checks every line against the bundled KJV).
+#
+# This table is our own editorial data, assembled by hand from the KJV text and Easton's headwords.
+# It is not Easton's (which is public domain in any case) and carries no third-party claim.
+#
+# Deliberately absent: Corinthians and Philippians. Those are not spelling variants of Corinth and
+# Philippi — the reader asking about the epistle is not asking about the city, and mapping one to
+# the other would answer a question they did not ask. Also absent: Elias, Esaias, Jonas, Timotheus,
+# Zacharias, Rahab and Sodom, because Easton's already has headwords under those spellings.
+melchisedec	Melchizedek	heb 7:1
+noe	Noah	matt 24:37
+jeremias	Jeremiah	matt 16:14
+osee	Hosea	rom 9:25
+beth-el	Bethel	gen 12:8
+jephthae	Jephthah	heb 11:32
+sara	Sarah	1 pet 3:6
+chanaan	Canaan	acts 7:11

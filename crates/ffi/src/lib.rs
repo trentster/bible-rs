@@ -553,6 +553,73 @@ pub fn range_label(from: VerseRef, to: VerseRef) -> String {
     }
 }
 
+/// One entry of a dictionary, as a frontend shows it.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct DefinitionEntry {
+    pub headword: String,
+    pub body: String,
+    /// The dictionary's own line, e.g. "Easton's Bible Dictionary (1897)".
+    pub source: String,
+}
+
+/// What the bundled dictionaries say about a word or short phrase.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct Definition {
+    pub entries: Vec<DefinitionEntry>,
+    /// The headword the entry was found under, when the spelling asked about is not itself a
+    /// headword — the KJV's "Melchisedec" reaching Easton's "Melchizedek". `None` when the word
+    /// was its own headword, and when nothing was found.
+    pub shown_as: Option<String>,
+}
+
+/// Defines a word or short phrase from the bundled dictionaries.
+///
+/// The lookup takes only text, so the Mac and the phone cannot disagree about what a word means.
+#[uniffi::export]
+pub fn define(word: String) -> Definition {
+    let found = bible_core::lexicon::define(&word);
+    Definition {
+        entries: found
+            .entries
+            .into_iter()
+            .map(|e| DefinitionEntry {
+                headword: e.headword,
+                body: e.body,
+                source: e.source.label().to_string(),
+            })
+            .collect(),
+        shown_as: found.shown_as,
+    }
+}
+
+#[cfg(test)]
+mod definition_tests {
+    use super::*;
+
+    #[test]
+    fn a_word_reaches_the_phone_with_its_dictionary_and_source() {
+        let found = define("propitiation".into());
+        assert_eq!(found.entries.len(), 1, "{found:?}");
+        assert!(found.entries[0].body.contains("propitious"), "{}", found.entries[0].body);
+        assert_eq!(found.entries[0].source, "Easton's Bible Dictionary (1897)");
+        assert!(found.shown_as.is_none());
+    }
+
+    #[test]
+    fn a_kjv_spelling_tells_the_phone_which_headword_it_used() {
+        let found = define("Melchisedec".into());
+        assert_eq!(found.shown_as.as_deref(), Some("Melchizedek"));
+        assert!(!found.entries.is_empty());
+    }
+
+    #[test]
+    fn an_unknown_word_comes_back_empty_rather_than_invented() {
+        let found = define("computer".into());
+        assert!(found.entries.is_empty());
+        assert!(found.shown_as.is_none());
+    }
+}
+
 fn utf16_ranges(text: &str, ranges: &[Range<usize>]) -> Vec<TextRange> {
     ranges
         .iter()

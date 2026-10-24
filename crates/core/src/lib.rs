@@ -9,6 +9,7 @@ pub mod format;
 pub mod highlight;
 #[cfg(feature = "import")]
 pub mod import;
+pub mod lexicon;
 #[cfg(feature = "native")]
 pub mod library;
 pub mod model;

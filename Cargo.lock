@@ -5859,6 +5859,7 @@ version = "0.2.0"
 dependencies = [
  "anyhow",
  "bible-core",
+ "flate2",
  "sha2 0.10.9",
  "zip",
 ]

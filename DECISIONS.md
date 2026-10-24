@@ -600,3 +600,15 @@ prototype.
 - SWORD modules in versifications other than KJV(A)/NRSV(A) (e.g. Vulgate, Synodal) aren't supported yet;
   deuterocanonical books are skipped everywhere to keep the 66-book grid.
 - Search covers locally available text; online translations are searched via their own sites.
+- **Word lookup gives English definitions only, in historic wording.** Easton's 1897 is the first
+  dictionary, with Webster's 1913 planned to cover ordinary and archaic English. Nothing here
+  reaches the Hebrew or Greek, so a reader looking up "propitiation" learns what the word meant to
+  a 19th-century editor, not what the underlying Greek does: no Strong's numbers, no lemmas, no
+  concordance. That study stays parked. The wording is a real cost — Easton's sentences are long
+  and sometimes dated — taken in exchange for a dictionary that is public domain, self-contained
+  and 2.6 MB.
+- **Word lookup refuses to guess.** A spelling the dictionary does not carry says so, unless the
+  curated table maps it to a headword; there is no fuzzy or edit-distance matching anywhere in the
+  lookup, so a reader is never shown a definition for a different word. The price is that KJV
+  spellings outside the table answer "no entry" even though the entry exists under another
+  spelling.

@@ -14,6 +14,8 @@ use bible_core::model::{Origin, TranslationBuilder, TranslationMeta};
 use bible_core::usfm;
 use sha2::{Digest, Sha256};
 
+mod zld;
+
 struct Source {
     id: &'static str,
     abbrev: &'static str,
@@ -208,6 +210,7 @@ fn main() -> Result<()> {
             }
             Ok(())
         }
+        Some("build-lexicon") => build_lexicon(&root, &args[1..]),
         Some("fetch") => {
             for s in selected(&args[1..]) {
                 fetch(&root, s)?;
@@ -215,11 +218,37 @@ fn main() -> Result<()> {
             Ok(())
         }
         _ => {
-            eprintln!("usage: cargo run -p xtask -- build-data [ids…] | fetch [ids…]");
+            eprintln!("usage: cargo run -p xtask -- build-data [ids…] | build-lexicon [ids…] | fetch [ids…]");
             std::process::exit(2)
         }
     }
 }
+
+/// A dictionary bundled with the app, converted from the module CrossWire ships.
+///
+/// The conversion is a build step: the app only ever reads the tab-separated file this writes.
+struct Dictionary {
+    id: &'static str,
+    name: &'static str,
+    url: &'static str,
+    sha256: &'static str,
+    /// The module's own directory inside the archive, holding `<id>.idx` and friends.
+    dir: &'static str,
+    license: &'static str,
+    copyright: &'static str,
+}
+
+const DICTIONARIES: &[Dictionary] = &[Dictionary {
+    id: "easton",
+    name: "Easton's Bible Dictionary",
+    url: "https://www.crosswire.org/ftpmirror/pub/sword/packages/rawzip/Easton.zip",
+    sha256: "f6dd054554764e2e97d5d189a697eb26039054578a9ccf98ce668ab810341c6e",
+    dir: "modules/lexdict/zld/easton",
+    license: "Public Domain",
+    copyright: "Easton's Bible Dictionary (1897) by Matthew George Easton, who died in 1894. Its \
+                distribution licence states \"Public Domain\". Text from the Christian Classics \
+                Ethereal Library, packaged by the CrossWire Bible Society.",
+}];
 
 fn selected(ids: &[String]) -> Vec<&'static Source> {
     SOURCES.iter().filter(|s| ids.is_empty() || ids.iter().any(|i| i == s.id)).collect()
@@ -303,6 +332,81 @@ fn build_data(root: &Path, ids: &[String]) -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn build_lexicon(root: &Path, ids: &[String]) -> Result<()> {
+    let out_dir = root.join("data/lexicon");
+    std::fs::create_dir_all(&out_dir)?;
+    for d in DICTIONARIES.iter().filter(|d| ids.is_empty() || ids.iter().any(|i| i == d.id)) {
+        let zip_path = fetch_dictionary(root, d)?;
+        let mut archive = zip::ZipArchive::new(std::fs::File::open(&zip_path)?)?;
+        let idx = module_file(&mut archive, d, "idx")?;
+        let dat = module_file(&mut archive, d, "dat")?;
+        let zdx = module_file(&mut archive, d, "zdx")?;
+        let zdt = module_file(&mut archive, d, "zdt")?;
+        let entries = zld::entries(&idx, &dat, &zdx, &zdt)?;
+        let mut out = format!("#bible-rs-lexicon v1\n#name\t{}\n#licence\t{}\n", d.name, d.license);
+        let mut bodyless = 0;
+        for (key, markup) in &entries {
+            let (headword, body) = zld::plain(markup);
+            let headword = if headword.is_empty() { key.clone() } else { headword };
+            if body.is_empty() {
+                bodyless += 1;
+            }
+            // The format is a line an entry: tabs and newlines inside a definition become a space
+            // and the two characters `\n`, which is what the reader turns back into a line break.
+            let headword: String = headword.replace(['\t', '\n'], " ");
+            let body = body.replace('\t', " ").replace('\n', "\\n");
+            out.push_str(&format!("{}\t{headword}\t{body}\n", d.id));
+        }
+        let path = out_dir.join(format!("{}.tsv", d.id));
+        std::fs::write(&path, &out)?;
+        println!(
+            "{:<28} {:>5} entries  {} with no definition  {:>5.2} MB → {}",
+            d.name,
+            entries.len(),
+            bodyless,
+            out.len() as f64 / 1e6,
+            path.display()
+        );
+    }
+    Ok(())
+}
+
+/// One file of a module, from inside its pinned archive.
+fn module_file(archive: &mut zip::ZipArchive<std::fs::File>, d: &Dictionary, ext: &str) -> Result<Vec<u8>> {
+    let path = format!("{}/{}.{ext}", d.dir, d.id);
+    let mut f = archive.by_name(&path).with_context(|| format!("{path} is not in the {} module", d.id))?;
+    let mut bytes = Vec::new();
+    std::io::Read::read_to_end(&mut f, &mut bytes)?;
+    Ok(bytes)
+}
+
+fn fetch_dictionary(root: &Path, d: &Dictionary) -> Result<PathBuf> {
+    let dir = root.join(".sources");
+    std::fs::create_dir_all(&dir)?;
+    let file = dir.join(format!("{}.zip", d.id));
+    if !file.exists() {
+        eprintln!("downloading {}", d.url);
+        let status = Command::new("curl").args(["-fsSL", "-o"]).arg(&file).arg(d.url).status()?;
+        if !status.success() {
+            bail!("download failed: {}", d.url);
+        }
+    }
+    let digest = hex(&Sha256::digest(std::fs::read(&file)?));
+    if digest != d.sha256 {
+        if std::env::var_os("XTASK_ACCEPT_UPDATED_SOURCES").is_some() {
+            eprintln!("warning: {} changed upstream; new sha256 = {digest}", d.id);
+        } else {
+            bail!(
+                "{} sha256 mismatch: expected {}, got {digest}. The upstream file changed; review it, \
+                 then update the pin (or set XTASK_ACCEPT_UPDATED_SOURCES=1).",
+                file.display(),
+                d.sha256
+            );
+        }
+    }
+    Ok(file)
 }
 
 fn hex(bytes: &[u8]) -> String {
