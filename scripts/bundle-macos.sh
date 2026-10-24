@@ -23,12 +23,22 @@ fi
 COPYRIGHT="$(sed -n 's/^Copyright (c) /Copyright © /p' LICENSE | head -1)"
 APP="dist/Bible.app"
 ENTITLEMENTS="packaging/macos/entitlements.plist"
-# Sparkle checks this feed for updates and installs only archives signed with the private half
-# of this key, which `generate_keys --account bible-rs` keeps in the release Mac's login keychain
-# (RELEASING.md). Every release must be signed with the same key.
+# In-app updating (Sparkle) is opt-in: `SPARKLE_UPDATES=1 scripts/bundle-macos.sh`.
+#
+# A fork leaves it off. Sparkle installs whatever the feed's signed archive contains, and the feed
+# and public key below are upstream's: an updating copy of a fork would replace itself with the
+# released app. Without Sparkle in the bundle the app says "This build can't update itself", and
+# About's Release Notes link opens GitHub (crates/app/src/updater).
+#
+# With SPARKLE_UPDATES=1: Sparkle checks this feed and installs only archives signed with the
+# private half of this key, which `generate_keys --account bible-rs` keeps in the release Mac's
+# login keychain (RELEASING.md). Every release must be signed with the same key.
+SPARKLE_UPDATES="${SPARKLE_UPDATES:-0}"
 FEED_URL="https://github.com/michaelshimeles/bible-rs/releases/latest/download/appcast.xml"
 SPARKLE_PUBLIC_KEY="Pq8ULcnRQOe3FxC6l7qBrhZ4VS3W53yxzZeO9z9dmY0="
-SPARKLE="$(scripts/fetch-sparkle.sh)"
+if [[ "$SPARKLE_UPDATES" == "1" ]]; then
+  SPARKLE_DIR="$(scripts/fetch-sparkle.sh)"
+fi
 
 # The window code calls NSWindow.toolbarStyle, new in macOS 11, and the x86_64 target would
 # otherwise default to 10.12. This also reaches the C code that cc builds (SQLite, zstd).
@@ -50,13 +60,17 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
 cp "$BIN" "$APP/Contents/MacOS/Bible"
 
-# Sparkle, loaded once the first frame is up (src/updater.rs). The app isn't sandboxed, so
+# Sparkle, loaded once the first frame is up (crates/app/src/updater). The app isn't sandboxed, so
 # Sparkle's XPC services aren't needed; headers and modules are build-time only.
 FRAMEWORK="$APP/Contents/Frameworks/Sparkle.framework"
-ditto "$SPARKLE/Sparkle.framework" "$FRAMEWORK"
-for part in XPCServices Headers PrivateHeaders Modules; do
-  rm -rf "${FRAMEWORK:?}/$part" "${FRAMEWORK:?}/Versions/B/$part"
-done
+if [[ "$SPARKLE_UPDATES" == "1" ]]; then
+  ditto "$SPARKLE_DIR/Sparkle.framework" "$FRAMEWORK"
+  for part in XPCServices Headers PrivateHeaders Modules; do
+    rm -rf "${FRAMEWORK:?}/$part" "${FRAMEWORK:?}/Versions/B/$part"
+  done
+else
+  rmdir "$APP/Contents/Frameworks"
+fi
 
 # App icon from the 1024 px PNG.
 ICONSET="$(mktemp -d)/AppIcon.iconset"
@@ -72,6 +86,14 @@ iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns"
 # The bundle ID is part of the signature's designated requirement, which the Keychain checks
 # before handing stored API keys back: changing it after a release makes every user approve
 # access again.
+PLIST_SPARKLE=""
+if [[ "$SPARKLE_UPDATES" == "1" ]]; then
+  PLIST_SPARKLE="  <key>SUFeedURL</key><string>${FEED_URL}</string>
+  <key>SUPublicEDKey</key><string>${SPARKLE_PUBLIC_KEY}</string>
+  <key>SURequireSignedFeed</key><true/>
+  <key>SUVerifyUpdateBeforeExtraction</key><true/>
+  <key>SUEnableAutomaticChecks</key><true/>"
+fi
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -93,11 +115,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>NSSupportsAutomaticGraphicsSwitching</key><true/>
   <key>NSRequiresAquaSystemAppearance</key><false/>
   <key>NSHumanReadableCopyright</key><string>${COPYRIGHT}. MIT License. Bundled translations are public domain.</string>
-  <key>SUFeedURL</key><string>${FEED_URL}</string>
-  <key>SUPublicEDKey</key><string>${SPARKLE_PUBLIC_KEY}</string>
-  <key>SURequireSignedFeed</key><true/>
-  <key>SUVerifyUpdateBeforeExtraction</key><true/>
-  <key>SUEnableAutomaticChecks</key><true/>
+${PLIST_SPARKLE}
 </dict>
 </plist>
 PLIST
@@ -105,16 +123,18 @@ plutil -lint "$APP/Contents/Info.plist" >/dev/null
 
 # Hardened runtime either way. An ad-hoc signature (required on Apple silicon) runs only on the
 # Mac that built it; a Developer ID signature gets a secure timestamp, which notarization needs.
-# Sparkle's helpers are signed inside out before the app; the framework must carry the app's
-# team, or library validation stops the hardened runtime from loading it.
+# With Sparkle in the bundle, its helpers are signed inside out before the app; the framework must
+# carry the app's team, or library validation stops the hardened runtime from loading it.
 if [[ -n "${SIGN_IDENTITY:-}" ]]; then
   SIGN=(codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY")
 else
   SIGN=(codesign --force --options runtime --sign -)
 fi
-"${SIGN[@]}" "$FRAMEWORK/Versions/B/Autoupdate"
-"${SIGN[@]}" "$FRAMEWORK/Versions/B/Updater.app"
-"${SIGN[@]}" "$FRAMEWORK"
+if [[ "$SPARKLE_UPDATES" == "1" ]]; then
+  "${SIGN[@]}" "$FRAMEWORK/Versions/B/Autoupdate"
+  "${SIGN[@]}" "$FRAMEWORK/Versions/B/Updater.app"
+  "${SIGN[@]}" "$FRAMEWORK"
+fi
 "${SIGN[@]}" --entitlements "$ENTITLEMENTS" "$APP"
 
-echo "Built $APP ($VERSION, $(lipo -archs "$APP/Contents/MacOS/Bible"))"
+echo "Built $APP ($VERSION, $(lipo -archs "$APP/Contents/MacOS/Bible"), Sparkle: $([[ "$SPARKLE_UPDATES" == "1" ]] && echo on || echo off))"
