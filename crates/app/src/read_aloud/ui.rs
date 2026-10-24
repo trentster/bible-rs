@@ -191,6 +191,12 @@ impl Listen {
                     self.line(bar, p, area, now, &state);
                 }
             });
+        // Only what moves asks for the next frame: the countdown while the voice is playing, and the
+        // fall to the hairline while that is still to come. A bar waiting on the reader — Ready, or
+        // Paused — wakes the app for nothing.
+        if state.speaking || now < self.bar_until {
+            ui.ctx().request_repaint_after(std::time::Duration::from_millis(120));
+        }
         true
     }
 

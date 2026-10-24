@@ -2728,9 +2728,6 @@ impl eframe::App for BibleApp {
                         egui::pos2(reader_rect.left(), reader_rect.top() + self.chrome.height),
                         reader_rect.max,
                     );
-                    if self.listen.active() {
-                        ui.ctx().request_repaint_after(std::time::Duration::from_millis(120));
-                    }
                     self.listen.show(&mut reader_ui, p, area, now);
                 }
             }
