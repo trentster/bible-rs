@@ -11,6 +11,7 @@ pub mod compare_popover;
 pub mod icons;
 pub mod import_sheet;
 pub mod keymap;
+pub mod lookup_popover;
 #[cfg(target_os = "macos")]
 pub mod macos_menu;
 #[cfg(target_os = "macos")]

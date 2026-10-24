@@ -302,6 +302,7 @@ pub struct BibleApp {
     onboarding: Option<crate::onboarding::Onboarding>,
     /// Compare Verse as a popover on the selected verse (frame 23).
     compare: Option<crate::compare_popover::ComparePopover>,
+    lookup: Option<crate::lookup_popover::LookUp>,
     /// Sharing the selected verses as an image or text (frame 22).
     share_sheet: Option<crate::share_sheet::ShareSheet>,
     /// Importing a translation (frames 13–15).
@@ -441,6 +442,7 @@ impl BibleApp {
             import_sheet: None,
             share_sheet: None,
             compare: None,
+            lookup: None,
             reminded: None,
             focus: false,
             focus_reveal: false,
@@ -579,6 +581,8 @@ impl BibleApp {
             key(cmd, Key::Num0, Action::FontReset);
             key(cmd, Key::T, Action::TextFormat);
             key(cmd, Key::D, Action::ToggleBookmark);
+            // ⌃⌘D, as Look Up Definition in the verse menu: the word under the last right-click.
+            key(Modifiers::COMMAND | Modifiers::CTRL, Key::D, Action::LookUpWord);
             key(cmd, Key::E, Action::Export(ExportKind::Markdown));
             key(cmd, Key::I, Action::ImportTranslation);
             for (n, k) in [
@@ -852,8 +856,19 @@ impl BibleApp {
             }
             Action::OpenVerseMenu(pos) => {
                 if !self.reader.selected_refs().is_empty() {
-                    self.verse_menu = Some(crate::verse_menu::VerseMenu::new(pos));
+                    // The feature works out the target: the selected words, else the clicked word.
+                    let word = crate::lookup_popover::target(
+                        &self.reader,
+                        &self.library,
+                        &self.settings,
+                        pos,
+                    );
+                    self.verse_menu = Some(crate::verse_menu::VerseMenu::new(pos, word));
                 }
+            }
+            Action::LookUpWord => {
+                self.lookup =
+                    crate::lookup_popover::LookUp::here(&self.reader, &self.library, &self.settings);
             }
             Action::ShareImage => {
                 let refs = self.reader.selected_refs();
@@ -1096,7 +1111,9 @@ impl BibleApp {
                 let (x, y) = at.split_once(',').unwrap_or(("600", "352"));
                 self.reader.set_selection(bible_core::reference::parse(r).map(|r| r.verse_ref()));
                 let pos = egui::pos2(x.parse().unwrap_or(600.0), y.parse().unwrap_or(352.0));
-                self.verse_menu = Some(crate::verse_menu::VerseMenu::new(pos).with_first_highlighted());
+                let word = crate::lookup_popover::target(&self.reader, &self.library, &self.settings, pos);
+                self.verse_menu =
+                    Some(crate::verse_menu::VerseMenu::new(pos, word).with_first_highlighted());
             }
             "share" => actions.push(Action::ShareImage),
             "size" => {
@@ -2701,10 +2718,21 @@ impl eframe::App for BibleApp {
                 }
             }
         }
+        if self.lookup.is_some() {
+            let close = match &mut self.lookup {
+                Some(l) => !self.pages.reader() || l.show(&ctx, p, &self.reader, &mut actions),
+                None => false,
+            };
+            if close {
+                self.lookup = None;
+            }
+        }
         let current = self.verse_menu.as_ref().and_then(|_| self.selection_color());
         if let Some(menu) = &mut self.verse_menu {
             let refs = self.reader.selected_refs();
-            if menu.show(&ctx, p, &self.study, &refs, current, &self.settings, &mut actions) {
+            let word = menu.word.clone();
+            if menu.show(&ctx, p, &self.study, &refs, current, &self.settings, word.as_deref(), &mut actions)
+            {
                 self.verse_menu = None;
             }
         }

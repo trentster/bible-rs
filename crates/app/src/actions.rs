@@ -77,6 +77,8 @@ pub enum Action {
     /// Make an image of the selected verses to share.
     ShareImage,
     Compare,
+    /// Look a word up in the dictionaries (right-clicking a word offers it).
+    LookUpWord,
     ClearSelection,
     SelectNext,
     SelectPrev,

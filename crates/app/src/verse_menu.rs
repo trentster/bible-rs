@@ -22,14 +22,16 @@ enum Line {
 
 pub struct VerseMenu {
     pos: Pos2,
+    /// The word or phrase the menu offers to look up, when there is one.
+    pub word: Option<String>,
     /// The item under the keyboard (and the pointer).
     highlighted: Option<usize>,
     opened: bool,
 }
 
 impl VerseMenu {
-    pub fn new(pos: Pos2) -> Self {
-        Self { pos, highlighted: None, opened: false }
+    pub fn new(pos: Pos2, word: Option<String>) -> Self {
+        Self { pos, word, highlighted: None, opened: false }
     }
 
     /// Starts with the first item highlighted, as when opened from the keyboard.
@@ -38,7 +40,7 @@ impl VerseMenu {
         self
     }
 
-    fn lines(study: &StudyStore, refs: &[VerseRef]) -> Vec<Line> {
+    fn lines(study: &StudyStore, refs: &[VerseRef], word: Option<&str>) -> Vec<Line> {
         let first = refs[0];
         let item = |icon: IconFn, label: &str, shortcut: &'static str, action: Option<Action>| Line::Item {
             icon,
@@ -46,7 +48,18 @@ impl VerseMenu {
             shortcut,
             action,
         };
-        vec![
+        let mut items: Vec<Line> = Vec::new();
+        // The word under the click leads the menu: it is what the reader came for.
+        if let Some(w) = word {
+            items.push(item(
+                icons::text_cursor,
+                &format!("Look Up “{w}”"),
+                "⌃⌘D",
+                Some(Action::LookUpWord),
+            ));
+            items.push(Line::Separator);
+        }
+        items.extend([
             item(
                 icons::note,
                 if study.note(first).is_some() { "Edit Note…" } else { "Add Note…" },
@@ -66,9 +79,10 @@ impl VerseMenu {
             Line::Separator,
             item(icons::compare, "Compare Translations", "C", Some(Action::Compare)),
             item(icons::columns, "Open in Parallel", "⇧⌘P", Some(Action::ToggleParallel)),
-            Line::Separator,
-            item(icons::text_cursor, "Select Verse Range", "⇧-click", None),
-        ]
+        ]);
+        items.push(Line::Separator);
+        items.push(item(icons::text_cursor, "Select Verse Range", "⇧-click", None));
+        items
     }
 
     /// Returns `true` when the menu should close.
@@ -82,12 +96,14 @@ impl VerseMenu {
         // The colour all of the selection has, if one: its swatch is checked, and clears.
         current: Option<HighlightColor>,
         settings: &crate::app::Settings,
+        // The word under the right-click, when there was one, so there is something to look up.
+        word: Option<&str>,
         actions: &mut Vec<Action>,
     ) -> bool {
         if refs.is_empty() {
             return true;
         }
-        let lines = Self::lines(study, refs);
+        let lines = Self::lines(study, refs, word);
         let enabled: Vec<usize> = lines
             .iter()
             .enumerate()

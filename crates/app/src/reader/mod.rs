@@ -112,6 +112,8 @@ pub struct Reader {
     pub selection: Option<(VerseRef, VerseRef)>,
     /// Words chosen in the selected verses; it goes when `selection` is set to anything else.
     text_selection: Option<TextSelection>,
+    /// The place in the text a right-click landed on, when it landed on one: the word a lookup reads.
+    clicked_text: Option<TextPos>,
     /// The translation the chosen words were counted in: they go when their column shows another.
     words_in: String,
     /// A drag choosing words is under way.
@@ -160,6 +162,7 @@ impl Reader {
             em: 19.0,
             selection: None,
             text_selection: None,
+            clicked_text: None,
             words_in: String::new(),
             dragging_text: false,
             painted: Vec::new(),
@@ -212,6 +215,21 @@ impl Reader {
             return vec![a];
         }
         (a.verse..=b.verse).map(|v| VerseRef::new(a.book, a.chapter, v)).collect()
+    }
+
+    /// The place in the text a right-click landed on, when it landed on one.
+    pub fn clicked_text(&self) -> Option<TextPos> {
+        self.clicked_text
+    }
+
+    /// The translation the clicked or chosen words are in.
+    pub fn words_in(&self) -> &str {
+        &self.words_in
+    }
+
+    /// The place in the text at `pt`: what a caller outside the reader hit-tests a click with.
+    pub fn text_pos(&self, pt: Pos2) -> Option<TextPos> {
+        self.text_pos_at(pt, None)
     }
 
     /// The words chosen, and the translation whose text they were counted in, when words rather
@@ -872,6 +890,11 @@ impl Reader {
                 self.set_selection(Some(v));
             }
             if let Some(pos) = resp.interact_pointer_pos() {
+                // Keep the word the click landed on, so a lookup needs no selection first.
+                if let Some(at) = self.text_pos_at(pos, None).filter(|at| at.verse == v) {
+                    self.words_in = env.columns.get(at.column).cloned().unwrap_or_default();
+                    self.clicked_text = Some(at);
+                }
                 actions.push(Action::OpenVerseMenu(pos));
             }
         }

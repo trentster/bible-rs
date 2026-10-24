@@ -74,6 +74,7 @@ impl Item {
 
 fn command_list(settings: &Settings) -> Vec<(&'static str, IconFn, Vec<&'static str>, Action)> {
     vec![
+        ("Look up a word", icons::text_cursor, vec!["⌃", "⌘", "D"], Action::LookUpWord),
         ("Toggle parallel translations", icons::columns, vec!["⇧", "⌘", "P"], Action::ToggleParallel),
         ("Theme: Light", sun_icon, vec![], Action::SetTheme(Theme::Light)),
         ("Theme: Sepia", sun_icon, vec![], Action::SetTheme(Theme::Sepia)),

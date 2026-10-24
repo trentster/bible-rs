@@ -176,14 +176,19 @@ fn text_point(harness: &Harness<'_, BibleApp>, s: &str) -> Option<egui::Pos2> {
     reader.point_at(bible_rs::reader::TextPos { verse, offset: offset.trim().parse().ok()?, column: 0 })
 }
 
-fn press(harness: &mut Harness<'_, BibleApp>, pos: egui::Pos2, modifiers: egui::Modifiers) {
+fn press(
+    harness: &mut Harness<'_, BibleApp>,
+    pos: egui::Pos2,
+    button: egui::PointerButton,
+    modifiers: egui::Modifiers,
+) {
     harness.event(egui::Event::ModifiersChanged(modifiers));
     harness.hover_at(pos);
     harness.step();
     for pressed in [true, false] {
         harness.event(egui::Event::PointerButton {
             pos,
-            button: egui::PointerButton::Primary,
+            button,
             pressed,
             modifiers,
         });
@@ -222,15 +227,21 @@ fn run_step(harness: &mut Harness<'_, BibleApp>, step: &str) {
     let (kind, arg) = step.split_once(':').unwrap_or((step, ""));
     let at = |p: egui::Pos2| format!("{},{}", p.x, p.y);
     match kind {
-        "click" | "shift-click" | "hover" => {
+        "click" | "shift-click" | "right-click" | "hover" => {
             let Some(p) = resolve(harness, arg) else {
                 eprintln!("BIBLE_RS_SHOT_SCRIPT: {step:?} isn't on screen");
                 return;
             };
             eprintln!("{step} → {kind}:{}", at(p));
             match kind {
-                "click" => press(harness, p, egui::Modifiers::NONE),
-                "shift-click" => press(harness, p, egui::Modifiers::SHIFT),
+                "click" => press(harness, p, egui::PointerButton::Primary, egui::Modifiers::NONE),
+                "shift-click" => {
+                    press(harness, p, egui::PointerButton::Primary, egui::Modifiers::SHIFT)
+                }
+                // What opens the verse menu on a word.
+                "right-click" => {
+                    press(harness, p, egui::PointerButton::Secondary, egui::Modifiers::NONE)
+                }
                 _ => {
                     harness.hover_at(p);
                     harness.run_steps(4);
