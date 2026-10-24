@@ -1,8 +1,8 @@
-//! A reading session: where we are, whether we are still speaking, and when to fall asleep.
+//! A reading session: where we are, whether we are still speaking, and how the reader wants it to end.
 //!
-//! No audio and no clock live here. The caller says how many seconds it has spoken, so every rule —
-//! the sleep timer, stopping at the end of a chapter, resuming at a verse — is testable to the
-//! second without waiting for anything.
+//! No audio and no clock live here. The sleep timer is the reader's *choice* — fifteen minutes, or the
+//! end of the chapter — and the caller holds the deadline on its own clock, so every rule is testable
+//! without waiting for anything.
 
 use super::text::{Utterance, chapter as script_of};
 
@@ -12,7 +12,7 @@ pub enum Sleep {
     /// Read the chapter to its end and stop, which is what reading always does.
     #[default]
     Off,
-    /// Stop after this many minutes of speech, finishing the verse in progress.
+    /// Stop at this time on the clock, fading the verse in progress.
     Minutes(u32),
 }
 
@@ -42,7 +42,6 @@ pub struct Session {
     at: usize,
     playing: bool,
     sleep: Sleep,
-    spoken: f32,
 }
 
 impl Session {
@@ -54,7 +53,6 @@ impl Session {
             at: 0,
             playing: false,
             sleep,
-            spoken: 0.0,
         }
     }
 
@@ -94,23 +92,6 @@ impl Session {
         Some(utterance)
     }
 
-    /// Counts speech that has finished playing, and reports whether the timer has run out.
-    pub fn spoke(&mut self, seconds: f32) -> bool {
-        self.spoken += seconds;
-        match self.sleep {
-            Sleep::Minutes(minutes) => self.spoken >= minutes as f32 * 60.0,
-            Sleep::Off => false,
-        }
-    }
-
-    /// Seconds left on the timer, if one is set.
-    pub fn remaining(&self) -> Option<f32> {
-        match self.sleep {
-            Sleep::Minutes(minutes) => Some((minutes as f32 * 60.0 - self.spoken).max(0.0)),
-            Sleep::Off => None,
-        }
-    }
-
     pub fn play(&mut self) {
         self.playing = true;
     }
@@ -123,7 +104,6 @@ impl Session {
     pub fn stop(&mut self) {
         self.playing = false;
         self.at = 0;
-        self.spoken = 0.0;
     }
 
     /// Every verse has been said.

@@ -99,17 +99,6 @@ mod tests {
     }
 
     #[test]
-    fn the_sleep_timer_ends_the_reading_after_its_minutes() {
-        let verses = vec![(1, "one".to_string())];
-        let mut session = Session::new("Psalms", 23, &verses, Sleep::Minutes(15));
-        session.play();
-        assert!(!session.spoke(14.0 * 60.0));
-        assert_eq!(session.remaining(), Some(60.0));
-        assert!(session.spoke(60.0), "fifteen minutes of speech stops it");
-        assert_eq!(session.remaining(), Some(0.0));
-    }
-
-    #[test]
     fn a_paused_session_says_nothing_further() {
         let verses = vec![(1, "one".to_string())];
         let mut session = Session::new("Psalms", 23, &verses, Sleep::Off);
@@ -136,11 +125,9 @@ mod tests {
         let mut session = Session::new("Psalms", 23, &verses, Sleep::Minutes(15));
         session.play();
         session.next();
-        session.spoke(30.0);
         session.stop();
         assert_eq!(session.position(), 0);
         assert!(!session.playing());
-        assert_eq!(session.remaining(), Some(15.0 * 60.0));
     }
 
     #[test]

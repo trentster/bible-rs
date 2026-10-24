@@ -4,7 +4,6 @@
 //! and the tempo the reader approved. Nothing here touches the network: the weights are bundled
 //! beside the app and every sample is made on this machine.
 
-mod countdown;
 mod player;
 mod reading;
 mod ui;

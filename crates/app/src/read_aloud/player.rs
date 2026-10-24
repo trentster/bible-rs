@@ -4,7 +4,7 @@
 //! callback rather than being handed a buffer and forgotten. The mixing itself is a pure function,
 //! so pausing, stopping and finishing are tested without an audio device.
 
-use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
@@ -14,17 +14,9 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 pub struct Controls {
     paused: AtomicBool,
     stopped: AtomicBool,
-    /// Microseconds of the voice that have actually reached the speakers. It stops while paused and
-    /// never rewinds, so anything counting down from it can only go one way.
-    heard_micros: AtomicU64,
 }
 
 impl Controls {
-    /// How much of the voice has been heard, in seconds.
-    pub fn heard_seconds(&self) -> f32 {
-        self.heard_micros.load(Ordering::Relaxed) as f32 / 1_000_000.0
-    }
-
     pub fn paused(&self) -> bool {
         self.paused.load(Ordering::Relaxed)
     }
@@ -94,10 +86,7 @@ pub fn play(pcm: &Arc<Vec<f32>>, rate: u32, controls: &Arc<Controls>) -> Result<
                     let before = at.load(Ordering::Relaxed);
                     let after = pump(&audio, out, before, obey.paused(), obey.stopped());
                     if after > before {
-                        let frames = (after - before) / channels.max(1);
-                        played.fetch_add(frames, Ordering::Relaxed);
-                        obey.heard_micros
-                            .fetch_add((frames as f64 * 1e6 / out_rate as f64) as u64, Ordering::Relaxed);
+                        played.fetch_add((after - before) / channels.max(1), Ordering::Relaxed);
                     }
                     if after != before {
                         at.store(after, Ordering::Relaxed);

@@ -10,7 +10,6 @@ use eframe::egui::{self, Align2, FontId, Pos2, Rect, Sense, Stroke, Ui, Vec2};
 
 use bible_core::speak::{Session, Sleep, Voice};
 
-use super::countdown::{clock, Countdown};
 use super::reading::{Reading, ReadingState};
 use crate::theme::Palette;
 
@@ -39,8 +38,8 @@ pub struct Listen {
     menu_rect: Rect,
     /// A state painted without any sound, so the bar can be photographed in the harness.
     preview: Option<ReadingState>,
-    /// What is left of the sleep timer, kept honest against the audio actually heard.
-    countdown: Countdown,
+    /// A countdown painted without a reading behind it, so the harness can photograph the bar.
+    preview_left: Option<f32>,
 }
 
 impl Listen {
@@ -54,7 +53,7 @@ impl Listen {
             timer_anchor: Rect::NOTHING,
             menu_rect: Rect::NOTHING,
             preview: None,
-            countdown: Countdown::new(),
+            preview_left: None,
         }
     }
 
@@ -83,20 +82,15 @@ impl Listen {
         self.label = label.into();
         self.voice = voice.name.to_string();
         self.reading = Some(Reading::open(session, voice));
-        self.countdown.rebase();
+        self.preview_left = None;
         self.touched(now);
     }
 
     /// Paints the bar without speaking, for the screenshot harness.
-    pub fn show_preview(&mut self, verse: u8, remaining: f32, label: impl Into<String>, now: f64) {
+    pub fn show_preview(&mut self, verse: u8, left: f32, label: impl Into<String>, now: f64) {
         self.label = label.into();
-        self.preview = Some(ReadingState {
-            verse: Some(verse),
-            speaking: true,
-            finished: false,
-            remaining: Some(remaining),
-            note: None,
-        });
+        self.preview = Some(ReadingState { verse: Some(verse), speaking: true, ..Default::default() });
+        self.preview_left = Some(left);
         self.touched(now);
     }
 
@@ -105,6 +99,7 @@ impl Listen {
             reading.stop();
         }
         self.preview = None;
+        self.preview_left = None;
         self.timer_open = false;
     }
 
@@ -123,17 +118,23 @@ impl Listen {
     pub fn resume(&mut self, now: f64) {
         if let Some(reading) = &self.reading {
             reading.resume();
+            // The countdown starts when play does, and runs on the clock from there.
+            reading.arm();
         }
         self.touched(now);
     }
 
     pub fn set_sleep(&mut self, sleep: Sleep, now: f64) {
         if let Some(reading) = &self.reading {
-            reading.set_sleep(sleep);
+            reading.choose(sleep);
         }
-        // A timer just armed is allowed to put the number up: everything else may only take it down.
-        self.countdown.rebase();
         self.touched(now);
+    }
+
+    /// What is left on the timer, if one is armed: straight off the clock.
+    fn left(&self) -> Option<f32> {
+        self.preview_left
+            .or_else(|| self.reading.as_ref().and_then(|reading| reading.left()))
     }
 
     pub fn sleep(&self) -> Sleep {
@@ -148,8 +149,6 @@ impl Listen {
             return false;
         }
         let state = self.state();
-        let heard = self.reading.as_ref().map_or(0.0, |reading| reading.heard());
-        self.countdown.follow(&state, heard);
         // A failure is worth saying even though the reading has already stopped: silence would read
         // as a dead button.
         if let Some(note) = &state.note {
@@ -191,10 +190,9 @@ impl Listen {
                     self.line(bar, p, area, now, &state);
                 }
             });
-        // Only what moves asks for the next frame: the countdown while the voice is playing, and the
-        // fall to the hairline while that is still to come. A bar waiting on the reader — Ready, or
-        // Paused — wakes the app for nothing.
-        if state.speaking || now < self.bar_until {
+        // Only what moves asks for the next frame: a countdown running down, and the fall to the
+        // hairline while that is still to come. A bar waiting on the reader wakes for nothing.
+        if state.speaking || self.left().is_some() || now < self.bar_until {
             ui.ctx().request_repaint_after(std::time::Duration::from_millis(120));
         }
         true
@@ -441,14 +439,14 @@ impl Listen {
     }
 
     /// Beside the stopwatch: what is left of the sleep timer, as a clock.
-    fn clock_text(&self, state: &ReadingState) -> String {
-        self.countdown.text(state)
+    fn clock_text(&self, _state: &ReadingState) -> String {
+        self.left().map(clock).unwrap_or_default()
     }
 
     /// The right-hand side of the hairline: the timer choice and what is left of it, or nothing at
     /// all when no timer is armed — a reading with no timer has nothing to count down.
-    fn right_text(&self, state: &ReadingState) -> String {
-        match self.countdown.left(state) {
+    fn right_text(&self, _state: &ReadingState) -> String {
+        match self.left() {
             Some(left) => format!("{} · {} left", sleep_label(self.sleep()), clock(left)),
             None => String::new(),
         }
@@ -524,6 +522,17 @@ impl Listen {
 }
 
 /// What the bar calls a sleep choice.
+/// Seconds as a clock: `14:52`, or `1:04:10` past an hour.
+fn clock(seconds: f32) -> String {
+    let total = seconds.max(0.0).round() as u32;
+    let (hours, minutes, secs) = (total / 3600, (total % 3600) / 60, total % 60);
+    if hours > 0 {
+        format!("{hours}:{minutes:02}:{secs:02}")
+    } else {
+        format!("{minutes}:{secs:02}")
+    }
+}
+
 fn sleep_label(sleep: Sleep) -> String {
     match sleep {
         Sleep::Minutes(minutes) => format!("{minutes} min"),

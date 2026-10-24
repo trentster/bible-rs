@@ -29,6 +29,13 @@ fn main() {
     let voice = Voice::by_name("Spencer").unwrap();
     let started = Instant::now();
     let reading = bible_rs::read_aloud::Reading::start(session, voice);
+    // The timer runs on the clock, so a short one proves the deadline ends the reading where it is.
+    if let Ok(seconds) = std::env::var("READ_SLEEP_SECONDS") {
+        if let Ok(seconds) = seconds.parse::<u64>() {
+            reading.arm_for(seconds);
+            println!("timer armed for {seconds} s on the clock");
+        }
+    }
 
     let mut seen = None;
     let mut paused_at = None;
@@ -36,6 +43,10 @@ fn main() {
     while started.elapsed() < Duration::from_secs(14) {
         std::thread::sleep(Duration::from_millis(200));
         let state = reading.state();
+        if state.finished && seen.is_some() {
+            println!("reading ended after {:.1} s", started.elapsed().as_secs_f32());
+            break;
+        }
         if state.verse != seen {
             seen = state.verse;
             println!(
@@ -43,7 +54,7 @@ fn main() {
                 started.elapsed().as_secs_f32(),
                 state.verse,
                 state.speaking,
-                state.remaining.map(|r| r.round())
+                reading.left().map(|r| r.round())
             );
         }
         if paused_at.is_none() && started.elapsed() > Duration::from_secs(4) {
