@@ -98,3 +98,9 @@ pub fn play_sample(voice: Voice) {
         Err(e) => eprintln!("read aloud: {e}"),
     });
 }
+
+/// Plays 24 kHz mono audio through the default output device, blocking until it has. The Settings
+/// button uses `play_sample`; this exists so a check can prove the device path without a mouse.
+pub fn play_for_test(pcm: &[f32]) -> Result<(), String> {
+    player::play(pcm, 24_000)
+}
