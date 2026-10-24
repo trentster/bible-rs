@@ -353,7 +353,11 @@ impl Listen {
             ui.painter().layout_no_wrap(clock.clone(), FontId::proportional(12.0), p.ink_2).size().x
         };
         let group_right = close_rect.left() - 20.0;
-        let group_left = group_right - clock_width - if clock_width > 0.0 { 32.0 } else { 6.0 };
+        // Room for the glyph, a gap, then the time — the glyph must be inside the box that reacts,
+        // or pressing the stopwatch itself does nothing.
+        let icon_space = 26.0;
+        let gap = if clock_width > 0.0 { 6.0 } else { 0.0 };
+        let group_left = group_right - clock_width - gap - icon_space;
         let group = Rect::from_min_max(
             Pos2::new(group_left, cy - 15.0),
             Pos2::new(group_right, cy + 15.0),
