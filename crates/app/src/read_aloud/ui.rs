@@ -38,6 +38,14 @@ pub struct Listen {
     menu_rect: Rect,
     /// A state painted without any sound, so the bar can be photographed in the harness.
     preview: Option<ReadingState>,
+    /// What the worker last reported, and when: a change means a fresh number to count down from.
+    counted_at_publish: Option<f32>,
+    /// What is left, followed at the rate the voice speaks between those reports.
+    left: Option<f32>,
+    /// The app clock when `left` was last brought up to date.
+    at: f64,
+    /// The number to paint: the followed count, or nothing when no timer is armed.
+    shown: Option<f32>,
 }
 
 impl Listen {
@@ -51,6 +59,10 @@ impl Listen {
             timer_anchor: Rect::NOTHING,
             menu_rect: Rect::NOTHING,
             preview: None,
+            counted_at_publish: None,
+            left: None,
+            at: 0.0,
+            shown: None,
         }
     }
 
@@ -141,6 +153,7 @@ impl Listen {
             return false;
         }
         let state = self.state();
+        self.follow_countdown(&state, now);
         // A failure is worth saying even though the reading has already stopped: silence would read
         // as a dead button.
         if let Some(note) = &state.note {
@@ -425,9 +438,31 @@ impl Listen {
         }
     }
 
-    /// Beside the moon: what is left of the sleep timer, as a clock.
+    /// The worker reports what is left of the reading once per verse, so the countdown on its own
+    /// would sit still and then drop four or five seconds as each verse is handed over. Between
+    /// those reports it is followed here, at the rate the voice actually speaks, and it stops when
+    /// the voice stops.
+    fn follow_countdown(&mut self, state: &ReadingState, now: f64) {
+        if state.remaining != self.counted_at_publish {
+            self.counted_at_publish = state.remaining;
+            self.left = state.remaining;
+            self.at = now;
+        }
+        let Some(left) = self.left.as_mut() else {
+            self.shown = None;
+            return;
+        };
+        if state.speaking {
+            let dt = (now - self.at).max(0.0) as f32;
+            *left = (*left - dt).max(0.0);
+        }
+        self.at = now;
+        self.shown = Some(*left);
+    }
+
+    /// Beside the stopwatch: what is left of the sleep timer, as a clock.
     fn clock_text(&self, state: &ReadingState) -> String {
-        match state.remaining {
+        match self.shown.or(state.remaining) {
             Some(left) => clock(left),
             None => String::new(),
         }
@@ -436,7 +471,7 @@ impl Listen {
     /// The right-hand side of the hairline: the timer choice and what is left of it, or nothing at
     /// all when no timer is armed — a reading with no timer has nothing to count down.
     fn right_text(&self, state: &ReadingState) -> String {
-        match state.remaining {
+        match self.shown.or(state.remaining) {
             Some(left) => format!("{} · {} left", sleep_label(self.sleep()), clock(left)),
             None => String::new(),
         }
@@ -588,6 +623,28 @@ mod tests {
         assert_eq!(listen.where_is(&state), "Psalms 23:2");
         let before = ReadingState::default();
         assert_eq!(listen.where_is(&before), "Psalms 23");
+    }
+
+    #[test]
+    fn the_countdown_runs_down_between_verse_reports() {
+        // The worker reports once per verse. Between reports the clock has to keep moving, or the
+        // reader watches it sit still and then jump four seconds.
+        let mut listen = Listen::new();
+        let mut state = ReadingState { remaining: Some(60.0), speaking: true, ..Default::default() };
+        listen.follow_countdown(&state, 0.0);
+        assert_eq!(listen.clock_text(&state), "1:00");
+        listen.follow_countdown(&state, 1.0);
+        assert_eq!(listen.clock_text(&state), "0:59");
+        listen.follow_countdown(&state, 2.0);
+        assert_eq!(listen.clock_text(&state), "0:58");
+        // Paused: the voice has stopped, so the number stops with it.
+        state.speaking = false;
+        listen.follow_countdown(&state, 9.0);
+        assert_eq!(listen.clock_text(&state), "0:58");
+        // The next report picks up from where the voice actually is.
+        state.remaining = Some(52.0);
+        listen.follow_countdown(&state, 9.0);
+        assert_eq!(listen.clock_text(&state), "0:52");
     }
 }
 
