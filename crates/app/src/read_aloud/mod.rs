@@ -105,7 +105,10 @@ impl Engine {
         for chunk in stream {
             pcm.extend_from_slice(&chunk.map_err(|e| format!("the voice stopped early: {e}"))?);
         }
-        Ok(Arc::new(bible_core::speak::stretch(&pcm, self.rate, voice.tempo())))
+        // The model leaves most of a second of quiet after its last word. Trim it, or every pause
+        // the reader asks for is really that pause plus the tail, and nothing can be tuned.
+        let trimmed = bible_core::speak::trim_silence(&pcm, self.rate);
+        Ok(Arc::new(bible_core::speak::stretch(&trimmed, self.rate, voice.tempo())))
     }
 }
 

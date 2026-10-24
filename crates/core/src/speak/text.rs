@@ -13,15 +13,16 @@ pub struct Utterance {
     pub verse: Option<u8>,
 }
 
-/// A breath between verses. Long enough to separate thoughts, short enough not to feel broken.
-pub const VERSE_PAUSE_MS: u32 = 380;
+/// A breath where a sentence ends. Chosen against the audio, not against the model: the voice's own
+/// trailing silence is trimmed first (`silence::trim_silence`), so this is the gap a listener hears.
+pub const SENTENCE_PAUSE_MS: u32 = 260;
 /// After the announcement, so "Hebrews, chapter seven" lands before the text starts.
-pub const ANNOUNCE_PAUSE_MS: u32 = 700;
+pub const ANNOUNCE_PAUSE_MS: u32 = 450;
 /// Where a sentence runs past what one breath of reading can hold, it is broken at a verse number
 /// with a clause pause rather than a full stop. Rare — 1.4% of the King James sentences cross three
 /// verses — but its longest runs 42 verses, and a bar that cannot move for two minutes is a bar that
 /// is lying about where the narrator is.
-pub const CONTINUE_PAUSE_MS: u32 = 120;
+pub const CLAUSE_PAUSE_MS: u32 = 110;
 /// The most a single utterance carries: 60 words is about 24 seconds of reading.
 pub const MAX_SENTENCE_WORDS: usize = 60;
 pub const MAX_SENTENCE_VERSES: usize = 3;
@@ -59,14 +60,14 @@ pub fn chapter(book: &str, number: u32, verses: &[(u32, String)]) -> Vec<Utteran
             said.push(Utterance {
                 text: std::mem::take(&mut sentence),
                 // A sentence cut short of its end gets a clause breath, not a full stop.
-                pause_ms: if running_on { CONTINUE_PAUSE_MS } else { VERSE_PAUSE_MS },
+                pause_ms: if running_on { CLAUSE_PAUSE_MS } else { SENTENCE_PAUSE_MS },
                 verse: started_at.take(),
             });
             carried = 0;
         }
     }
     if !sentence.is_empty() {
-        said.push(Utterance { text: sentence, pause_ms: VERSE_PAUSE_MS, verse: started_at });
+        said.push(Utterance { text: sentence, pause_ms: SENTENCE_PAUSE_MS, verse: started_at });
     }
     said
 }

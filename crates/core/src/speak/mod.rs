@@ -6,9 +6,11 @@ mod text;
 mod voices;
 
 pub use session::{Session, Sleep};
+pub use silence::{trim_silence, KEEP_TAIL_MS};
+pub mod silence;
 pub use stretch::stretch;
 pub use text::{
-    chapter, speakable, words, Utterance, ANNOUNCE_PAUSE_MS, CONTINUE_PAUSE_MS, VERSE_PAUSE_MS,
+    chapter, speakable, words, Utterance, ANNOUNCE_PAUSE_MS, CLAUSE_PAUSE_MS, SENTENCE_PAUSE_MS,
 };
 pub use voices::{Accent, Voice, SPEECH_WPM, VOICES};
 
@@ -76,7 +78,7 @@ mod tests {
         assert_eq!(script[0].pause_ms, ANNOUNCE_PAUSE_MS);
         assert_eq!(script.len(), 3);
         assert_eq!(script[1].text, "For this Melchisedec");
-        assert_eq!(script[1].pause_ms, VERSE_PAUSE_MS);
+        assert_eq!(script[1].pause_ms, SENTENCE_PAUSE_MS);
     }
 
     #[test]
@@ -172,7 +174,7 @@ mod tests {
         let script = chapter("Psalms", 23, &verses);
         assert_eq!(script.len(), 3);
         assert_eq!(script[1].text, "The first thing.");
-        assert_eq!(script[1].pause_ms, VERSE_PAUSE_MS);
+        assert_eq!(script[1].pause_ms, SENTENCE_PAUSE_MS);
         assert_eq!(script[2].text, "A clause that runs on; and the sentence closes.");
         assert_eq!(script[2].verse, Some(2));
     }
@@ -184,7 +186,7 @@ mod tests {
         let script = chapter("Hebrews", 7, &verses);
         assert_eq!(script.len(), 3, "the announcement, three verses, then the last two");
         assert_eq!(script[1].verse, Some(1));
-        assert_eq!(script[1].pause_ms, CONTINUE_PAUSE_MS, "cut short, so a clause breath");
+        assert_eq!(script[1].pause_ms, CLAUSE_PAUSE_MS, "cut short, so a clause breath");
         assert!(script[1].text.ends_with(';'));
         assert_eq!(script[2].verse, Some(4), "the narrator's position follows the break");
     }
