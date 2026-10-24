@@ -105,6 +105,13 @@ impl Reading {
         self.state.lock().map(|s| s.clone()).unwrap_or_default()
     }
 
+    /// How much of the voice has actually reached the speakers, in seconds. The reading bar counts
+    /// its timer down from this rather than from the clock on the wall, so the number cannot run
+    /// ahead while a verse is being made, and cannot step back when the truth catches up.
+    pub fn heard(&self) -> f32 {
+        self.controls.heard_seconds()
+    }
+
     fn update(&self, change: impl FnOnce(&mut ReadingState)) {
         if let Ok(mut state) = self.state.lock() {
             change(&mut state);
