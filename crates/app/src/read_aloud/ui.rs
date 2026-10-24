@@ -160,7 +160,10 @@ impl Listen {
             self.reading = None;
             return false;
         }
-        let expanded = now < self.bar_until;
+        // The bar falls back to the hairline only while it is actually speaking: that is the point
+        // at which the reader's eyes want the page back. A bar waiting for a press — Ready, or
+        // Paused — stays where it is, because nothing explains where it went if it slides away.
+        let expanded = now < self.bar_until || !state.speaking;
         if expanded {
             self.pill(ui, p, area, now, &state);
         } else {
