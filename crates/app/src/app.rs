@@ -1132,14 +1132,17 @@ impl BibleApp {
                 self.open_more = true;
                 self.more_highlight = arg.parse().ok();
             }
-            // `listen:<verse>`: the reading bar, painted as if a chapter were being read.
+            // `listen:<verse>[,<seconds left>]`: the reading bar, painted as if a chapter were
+            // being read. The seconds let a shot show any point in the countdown.
             #[cfg(feature = "speak")]
             "listen" => {
-                let verse: u8 = arg.split(',').next().and_then(|v| v.parse().ok()).unwrap_or(2);
+                let (verse, left) = arg.split_once(',').unwrap_or((arg, "892"));
+                let verse: u8 = verse.trim().parse().unwrap_or(2);
+                let left: f32 = left.trim().parse().unwrap_or(892.0);
                 let now = ctx.input(|i| i.time);
                 let (c, _) = self.reader.location;
                 let label = format!("{} {}", c.book().name(), c.chapter());
-                self.listen.show_preview(verse, 892.0, label, now);
+                self.listen.show_preview(verse, left, label, now);
             }
             // `menu:<reference>@x,y`: select the verse and open its menu there.
             "menu" => {

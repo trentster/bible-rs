@@ -370,12 +370,13 @@ impl Listen {
 
         // The stopwatch and its countdown are one control: a 14 pt glyph alone is a small target
         // for someone reading in bed, and the time reads as the button's own label.
+        // The countdown gets a fixed slot, and digits that all share one width: measured from the
+        // number itself, the stopwatch shuffled sideways as the time changed, which reads as the
+        // whole bar twitching once a second.
         let clock = self.clock_text(state);
-        let clock_width = if clock.is_empty() {
-            0.0
-        } else {
-            ui.painter().layout_no_wrap(clock.clone(), FontId::proportional(12.0), p.ink_2).size().x
-        };
+        let clock_font = FontId::monospace(12.0);
+        let widest = ui.painter().layout_no_wrap("88:88".to_string(), clock_font.clone(), p.ink_2).size().x;
+        let clock_width = if clock.is_empty() { 0.0 } else { widest };
         let group_right = close_rect.left() - 20.0;
         // Room for the glyph, a gap, then the time — the glyph must be inside the box that reacts,
         // or pressing the stopwatch itself does nothing.
@@ -397,13 +398,7 @@ impl Listen {
         let armed = !clock.is_empty();
         crate::icons::stopwatch(ui.painter(), icon, if armed { p.accent_quiet } else { p.ink_2 });
         if !clock.is_empty() {
-            ui.painter().text(
-                Pos2::new(group_right, cy),
-                Align2::RIGHT_CENTER,
-                clock,
-                FontId::proportional(12.0),
-                p.ink_2,
-            );
+            ui.painter().text(Pos2::new(group_right, cy), Align2::RIGHT_CENTER, clock, clock_font, p.ink_2);
         }
         if timer.clicked() {
             self.timer_open = !self.timer_open;
