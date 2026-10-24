@@ -222,8 +222,13 @@ impl Listen {
             Vec2::new(area.width(), LINE_HEIGHT),
         );
         let resp = ui.interact(rect, ui.id().with("read-aloud-line"), Sense::click());
-        if resp.hovered() || resp.clicked() || self.timer_open {
-            // Hovering brings the controls back in the same place, so nothing moves.
+        if resp.hovered() {
+            // A pointer, so the line is known to be pressable — but nothing moves and nothing
+            // opens while the pointer merely crosses it.
+            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+        }
+        if resp.clicked() || self.timer_open {
+            // A press brings the controls back in the same place, so nothing moves.
             self.bar_until = now + BAR_SECONDS;
             ui.painter().rect_filled(rect, 0.0, p.fill);
             ui.painter().hline(
@@ -374,7 +379,10 @@ impl Listen {
             ui.painter().rect_filled(group, 9.0, p.fill_strong);
         }
         let icon = Rect::from_center_size(Pos2::new(group_left + 13.0, cy), Vec2::splat(30.0));
-        stopwatch_icon(ui.painter(), icon, if self.timer_open { p.accent_quiet } else { p.ink_2 });
+        // Grey until a time has been set, then the quiet navy: the same rule as the toolbar
+        // speaker — tinted means there is something in effect.
+        let armed = !clock.is_empty();
+        stopwatch_icon(ui.painter(), icon, if armed { p.accent_quiet } else { p.ink_2 });
         if !clock.is_empty() {
             ui.painter().text(
                 Pos2::new(group_right, cy),
