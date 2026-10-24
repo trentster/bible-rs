@@ -12,7 +12,7 @@ use serde_json::Value;
 const TOKENS: &str = "assets/design-tokens.json";
 
 /// Colour roles shared by every theme, in `Palette` field order.
-const ROLES: [&str; 24] = [
+const ROLES: [&str; 25] = [
     "paper",
     "sidebar",
     "surface",
@@ -33,6 +33,7 @@ const ROLES: [&str; 24] = [
     "accent",
     "on_accent",
     "accent_soft",
+    "accent_quiet",
     "selection",
     "focus",
     "danger",

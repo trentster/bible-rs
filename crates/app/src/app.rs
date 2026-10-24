@@ -313,6 +313,9 @@ pub struct BibleApp {
     /// Compare Verse as a popover on the selected verse (frame 23).
     compare: Option<crate::compare_popover::ComparePopover>,
     lookup: Option<crate::lookup_popover::LookUp>,
+    /// Read aloud: the chapter being spoken, and the bar that shows it.
+    #[cfg(feature = "speak")]
+    listen: crate::read_aloud::Listen,
     /// Sharing the selected verses as an image or text (frame 22).
     share_sheet: Option<crate::share_sheet::ShareSheet>,
     /// Importing a translation (frames 13–15).
@@ -453,6 +456,8 @@ impl BibleApp {
             share_sheet: None,
             compare: None,
             lookup: None,
+            #[cfg(feature = "speak")]
+            listen: crate::read_aloud::Listen::new(),
             reminded: None,
             focus: false,
             focus_reveal: false,
@@ -744,6 +749,12 @@ impl BibleApp {
                     let cols = self.columns();
                     self.library.warm(&cols);
                 }
+            }
+            Action::Listen => {
+                #[cfg(feature = "speak")]
+                self.toggle_listen(ctx);
+                #[cfg(not(feature = "speak"))]
+                let _ = ctx;
             }
             Action::OpenInParallel(a) => {
                 self.apply_one(ctx, *a);
@@ -1121,6 +1132,15 @@ impl BibleApp {
                 self.open_more = true;
                 self.more_highlight = arg.parse().ok();
             }
+            // `listen:<verse>`: the reading bar, painted as if a chapter were being read.
+            #[cfg(feature = "speak")]
+            "listen" => {
+                let verse: u8 = arg.split(',').next().and_then(|v| v.parse().ok()).unwrap_or(2);
+                let now = ctx.input(|i| i.time);
+                let (c, _) = self.reader.location;
+                let label = format!("{} {}", c.book().name(), c.chapter());
+                self.listen.show_preview(verse, 892.0, label, now);
+            }
             // `menu:<reference>@x,y`: select the verse and open its menu there.
             "menu" => {
                 let (r, at) = arg.split_once('@').unwrap_or((arg, "600,352"));
@@ -1396,6 +1416,34 @@ impl BibleApp {
         open
     }
 
+    /// Read aloud: the whole current chapter, from the top, in the voice chosen in Settings.
+    #[cfg(feature = "speak")]
+    fn toggle_listen(&mut self, ctx: &egui::Context) {
+        if self.listen.active() {
+            self.listen.stop();
+            return;
+        }
+        let now = ctx.input(|i| i.time);
+        let (chapter, _) = self.reader.location;
+        let Ok(text) = self.library.load(&self.settings.translation) else {
+            return;
+        };
+        let verses: Vec<(u32, String)> =
+            text.verses_in(chapter).map(|v| (v.number as u32, v.text.to_string())).collect();
+        if verses.is_empty() {
+            return;
+        }
+        let book = chapter.book().name();
+        let number = chapter.chapter() as u16;
+        let session = bible_core::speak::Session::new(
+            book,
+            number,
+            &verses,
+            bible_core::speak::Sleep::default(),
+        );
+        self.listen.begin(session, self.settings.voice(), format!("{book} {number}"), now);
+    }
+
     /// The toolbar over the reading area (`ds-06` in the design): back/forward (after the
     /// sidebar toggle when the sidebar is hidden), the location and translation pickers centred,
     /// view tools and the search field at the end. Every control is a glass capsule centred on
@@ -1502,27 +1550,53 @@ impl BibleApp {
             trailing_left = if compact {
                 search.left()
             } else {
-                let tools = [
-                    CapsuleButton {
-                        tooltip: "Parallel translations (⌘⇧P)",
-                        enabled: true,
-                        on: self.settings.parallel_on,
-                        icon: crate::icons::columns,
-                    },
-                    CapsuleButton {
-                        tooltip: "Text & layout (⌘T)",
-                        enabled: true,
-                        on: false,
-                        icon: crate::icons::text_size,
-                    },
-                ];
-                let tools_left = search.left() - GROUP_GAP - 2.0 * BUTTON_WIDTH;
+                let mut tools: Vec<CapsuleButton> = Vec::new();
+                // Read aloud first: it is the one control here that changes what the app is doing.
+                #[cfg(feature = "speak")]
+                tools.push(CapsuleButton {
+                    tooltip: "Read aloud (⌥⌘R)",
+                    enabled: true,
+                    on: false,
+                    icon: crate::icons::speaker,
+                });
+                tools.push(CapsuleButton {
+                    tooltip: "Parallel translations (⌘⇧P)",
+                    enabled: true,
+                    on: self.settings.parallel_on,
+                    icon: crate::icons::columns,
+                });
+                tools.push(CapsuleButton {
+                    tooltip: "Text & layout (⌘T)",
+                    enabled: true,
+                    on: false,
+                    icon: crate::icons::text_size,
+                });
+                let tools_left = search.left() - GROUP_GAP - tools.len() as f32 * BUTTON_WIDTH;
                 let (tools_rect, resp) =
                     widgets::button_capsule(ui, p, tools_left, cy, BUTTON_WIDTH, false, &tools);
-                if resp[0].clicked() {
+                let mut slot = 0;
+                #[cfg(feature = "speak")]
+                {
+                    if resp[0].clicked() {
+                        actions.push(Action::Listen);
+                    }
+                    // Busy, but not loud: the speaker is coloured, never filled.
+                    if self.listen.active() {
+                        crate::icons::speaker(
+                            ui.painter(),
+                            egui::Rect::from_center_size(
+                                resp[0].rect.center(),
+                                egui::Vec2::splat(crate::theme::metrics::ICON),
+                            ),
+                            p.accent_quiet,
+                        );
+                    }
+                    slot = 1;
+                }
+                if resp[slot].clicked() {
                     actions.push(Action::ToggleParallel);
                 }
-                text_anchor = Some((resp[1].clone(), true));
+                text_anchor = Some((resp[slot + 1].clone(), true));
                 items.push(tools_rect);
                 tools_rect.left()
             };
@@ -2645,6 +2719,19 @@ impl eframe::App for BibleApp {
             } else {
                 self.reader.marker_for = self.note_popover.as_ref().map(|n| n.verse);
                 self.reader.show(&mut reader_ui, &env, &mut actions);
+                // The listening bar sits over the foot of the page, never in the text's way.
+                #[cfg(feature = "speak")]
+                {
+                    let now = ctx.input(|i| i.time);
+                    let area = egui::Rect::from_min_max(
+                        egui::pos2(reader_rect.left(), reader_rect.top() + self.chrome.height),
+                        reader_rect.max,
+                    );
+                    if self.listen.active() {
+                        ui.ctx().request_repaint_after(std::time::Duration::from_millis(120));
+                    }
+                    self.listen.show(&mut reader_ui, p, area, now);
+                }
             }
             if first {
                 crate::trace(self.startup.t0, "reader laid out and painted");

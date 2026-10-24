@@ -196,6 +196,8 @@ pub struct Palette {
     pub on_accent: Color32,
     /// Selected rows and chips.
     pub accent_soft: Color32,
+    /// Busy, but not the focus of the eye: the speaker while a chapter is being read.
+    pub accent_quiet: Color32,
     /// Selected-verse wash, translucent so highlights show through.
     pub selection: Color32,
     /// Keyboard focus ring.

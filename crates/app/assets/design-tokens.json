@@ -23,6 +23,7 @@
       "accent": "#2D4A9E",
       "on_accent": "#FFFFFF",
       "accent_soft": "#E4E9F6",
+      "accent_quiet": "#4E5F8A",
       "selection": "#2D4A9E24",
       "focus": "#2D4A9E66",
       "danger": "#C4372C",
@@ -49,6 +50,7 @@
       "accent": "#8EA6F2",
       "on_accent": "#111526",
       "accent_soft": "#263156",
+      "accent_quiet": "#7E8CAE",
       "selection": "#8EA6F233",
       "focus": "#8EA6F280",
       "danger": "#F07A6E",
@@ -75,6 +77,7 @@
       "accent": "#3C5490",
       "on_accent": "#FFF9EE",
       "accent_soft": "#E2DFDA",
+      "accent_quiet": "#4E5A7A",
       "selection": "#3C549024",
       "focus": "#3C549066",
       "danger": "#A8392C",
@@ -153,7 +156,7 @@
         "line_height": 36,
         "weight": 400,
         "tracking_em": -0.01,
-        "usage": "Page titles (Notes, Bookmarks…), chapter numerals in lists"
+        "usage": "Page titles (Notes, Bookmarks\u2026), chapter numerals in lists"
       },
       "body": {
         "family": "reading",
@@ -161,7 +164,7 @@
         "line_height": 32,
         "weight": 400,
         "tracking_em": 0,
-        "usage": "Scripture (default 20 pt; user-adjustable 14–32)"
+        "usage": "Scripture (default 20 pt; user-adjustable 14\u201332)"
       },
       "subtitle": {
         "family": "reading",

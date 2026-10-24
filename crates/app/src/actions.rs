@@ -23,6 +23,8 @@ pub enum Action {
     /// Switch to the n-th installed translation (⌘1…⌘9).
     TranslationNumber(usize),
     ToggleParallel,
+    /// Read aloud: start the current chapter, or stop it if it is already being read.
+    Listen,
     /// Do something (a jump), then show it with the parallel translations.
     OpenInParallel(Box<Action>),
     /// Select a verse and compare it across translations.
