@@ -15,6 +15,7 @@ use anyhow::Result;
 use super::{BookShare, CachePolicy, DailyBudget, FetchedChapter, Source, http_agent, read_body};
 use crate::books::{BookId, ChapterIdx};
 use crate::model::{TranslationBuilder, TranslationMeta};
+use crate::sync::LockExt;
 pub use crate::nlt_html::{COPYRIGHT, parse_html, parse_into};
 
 pub const DEFAULT_BASE: &str = "https://api.nlt.to";
@@ -64,7 +65,7 @@ impl Nlt {
             return Err(e);
         }
         {
-            let mut last = self.last_request.lock().unwrap();
+            let mut last = self.last_request.lock_or_recover();
             if let Some(t) = *last {
                 std::thread::sleep(self.interval.saturating_sub(t.elapsed()));
             }

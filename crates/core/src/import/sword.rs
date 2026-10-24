@@ -199,7 +199,7 @@ pub fn read_module(
             handler.b.begin_book(book);
             for ch in 1..=book.chapters() {
                 idx += 1;
-                let c = ChapterIdx::new(book, ch).unwrap();
+                let c = ChapterIdx::new(book, ch).context("the module's chapter is out of range")?;
                 handler.b.begin_chapter(ch as u32);
                 let n = verses_in(c);
                 for v in 1..=n {
@@ -290,13 +290,10 @@ impl TestamentReader {
             Driver::RawText { size4 } => {
                 let w = if size4 { 8 } else { 6 };
                 let Some(rec) = self.index.get(idx * w..idx * w + w) else { return Ok(Vec::new()) };
-                let off = u32::from_le_bytes(rec[0..4].try_into().unwrap()) as usize;
-                let len = if size4 {
-                    u32::from_le_bytes(rec[4..8].try_into().unwrap()) as usize
-                } else {
-                    u16::from_le_bytes(rec[4..6].try_into().unwrap()) as usize
-                };
-                let mut raw = self.data.get(off..off + len).context("verse out of range")?.to_vec();
+                let off = le(rec, 0, 4)? as usize;
+                let len = le(rec, 4, if size4 { 4 } else { 2 })? as usize;
+                let end = off.checked_add(len).context("a verse runs past the end of the module")?;
+                let mut raw = self.data.get(off..end).context("verse out of range")?.to_vec();
                 if let Some(k) = &self.key {
                     Sapphire::new(k.as_bytes()).decrypt_in_place(&mut raw);
                 }
@@ -305,18 +302,15 @@ impl TestamentReader {
             Driver::ZText { size4 } => {
                 let w = if size4 { 12 } else { 10 };
                 let Some(rec) = self.index.get(idx * w..idx * w + w) else { return Ok(Vec::new()) };
-                let block = u32::from_le_bytes(rec[0..4].try_into().unwrap()) as usize;
-                let off = u32::from_le_bytes(rec[4..8].try_into().unwrap()) as usize;
-                let len = if size4 {
-                    u32::from_le_bytes(rec[8..12].try_into().unwrap()) as usize
-                } else {
-                    u16::from_le_bytes(rec[8..10].try_into().unwrap()) as usize
-                };
+                let block = le(rec, 0, 4)? as usize;
+                let off = le(rec, 4, 4)? as usize;
+                let len = le(rec, 8, if size4 { 4 } else { 2 })? as usize;
                 if len == 0 {
                     return Ok(Vec::new());
                 }
                 let data = self.block(block)?;
-                Ok(data.get(off..off + len).context("verse outside its block")?.to_vec())
+                let end = off.checked_add(len).context("a verse runs past the end of its block")?;
+                Ok(data.get(off..end).context("verse outside its block")?.to_vec())
             }
         }
     }
@@ -328,10 +322,11 @@ impl TestamentReader {
             return Ok(d.clone());
         }
         let rec = self.blocks.get(n * 12..n * 12 + 12).context("block index out of range")?;
-        let off = u32::from_le_bytes(rec[0..4].try_into().unwrap()) as usize;
-        let size = u32::from_le_bytes(rec[4..8].try_into().unwrap()) as usize;
-        let ucsize = u32::from_le_bytes(rec[8..12].try_into().unwrap()) as usize;
-        let mut comp = self.data.get(off..off + size).context("block out of range")?.to_vec();
+        let off = le(rec, 0, 4)? as usize;
+        let size = le(rec, 4, 4)? as usize;
+        let ucsize = le(rec, 8, 4)? as usize;
+        let end = off.checked_add(size).context("a module block runs past the end of the file")?;
+        let mut comp = self.data.get(off..end).context("block out of range")?.to_vec();
         if let Some(k) = &self.key {
             Sapphire::new(k.as_bytes()).decrypt_in_place(&mut comp);
         }
@@ -348,6 +343,17 @@ impl TestamentReader {
         *self.cache.borrow_mut() = Some((n, rc.clone()));
         Ok(rc)
     }
+}
+
+/// A little-endian number out of a fixed-width module record. The records are probed with
+/// `get(..)` first, so this only fails on a truncated module file — which must be an error, not a
+/// panic: the bytes come from the file being imported.
+fn le(rec: &[u8], at: usize, n: usize) -> Result<u64> {
+    let n = n.min(8);
+    let b = rec.get(at..at.saturating_add(n)).context("a module record is truncated")?;
+    let mut buf = [0u8; 8];
+    buf[..n].copy_from_slice(b);
+    Ok(u64::from_le_bytes(buf))
 }
 
 /// ThML markup (older CrossWire modules).

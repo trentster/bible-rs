@@ -20,6 +20,7 @@ use crate::import::Imported;
 use crate::model::{Origin, Translation, TranslationMeta};
 use crate::online::{self, ChapterState, DiskCache, OnlineConfig, OnlineTranslation, ProviderKind};
 use crate::secrets::SecretStore;
+use crate::sync::LockExt;
 
 pub enum EntryKind {
     Bundled(&'static [u8]),
@@ -347,7 +348,7 @@ impl Library {
         let keys = self.keys.clone();
         let secrets = self.secrets.clone();
         let key = Arc::new(move || {
-            let mut map = keys.values.lock().unwrap();
+            let mut map = keys.values.lock_or_recover();
             map.entry(name).or_insert_with(|| secrets.get(name)).clone()
         });
         let ot = OnlineTranslation::new(cfg, source, self.cache.clone(), key, self.notify.clone());
@@ -362,7 +363,7 @@ impl Library {
         let keys = self.keys.clone();
         let secrets = self.secrets.clone();
         let key = Arc::new(move || {
-            let mut map = keys.values.lock().unwrap();
+            let mut map = keys.values.lock_or_recover();
             map.entry(name).or_insert_with(|| secrets.get(name)).clone()
         });
         let id = cfg.id.clone();
@@ -373,7 +374,7 @@ impl Library {
     }
 
     pub fn api_key(&self, name: &'static str) -> Option<String> {
-        let mut map = self.keys.values.lock().unwrap();
+        let mut map = self.keys.values.lock_or_recover();
         map.entry(name).or_insert_with(|| self.secrets.get(name)).clone()
     }
 
@@ -381,7 +382,7 @@ impl Library {
     pub fn set_api_key(&self, name: &'static str, value: &str) -> Result<()> {
         self.secrets.put(name, value)?;
         let v = value.trim();
-        self.keys.values.lock().unwrap().insert(name, (!v.is_empty()).then(|| v.to_string()));
+        self.keys.values.lock_or_recover().insert(name, (!v.is_empty()).then(|| v.to_string()));
         (self.notify)();
         Ok(())
     }

@@ -33,6 +33,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::books::{BookId, ChapterIdx};
 use crate::model::{Origin, Translation, TranslationMeta};
+use crate::sync::LockExt;
 
 /// Persisted description of an online translation (no secrets: keys live in the keychain).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -159,6 +160,9 @@ struct Shared {
     failed: HashMap<ChapterIdx, (String, Instant)>,
     reported: HashSet<ChapterIdx>,
     copyright: Option<String>,
+    /// Set when the fetch thread could not be started: nothing will ever arrive, so every
+    /// chapter reports this instead of waiting for a worker that does not exist.
+    dead: Option<String>,
 }
 
 pub struct OnlineTranslation {
@@ -215,6 +219,7 @@ impl OnlineTranslation {
             failed: HashMap::new(),
             reported: HashSet::new(),
             copyright: None,
+            dead: None,
         }));
         let (tx, rx) = channel();
         let worker = Worker {
@@ -225,16 +230,20 @@ impl OnlineTranslation {
             key: key.clone(),
             notify,
         };
-        std::thread::Builder::new()
+        // A thread that cannot start (an exhausted process) leaves no worker at all: record why,
+        // rather than panicking, so [chapter] can say so.
+        if let Err(e) = std::thread::Builder::new()
             .name(format!("fetch-{}", config.id))
             .spawn(move || worker.run(rx))
-            .expect("spawn fetch worker");
+        {
+            shared.lock_or_recover().dead = Some(format!("couldn't start the fetch worker: {e}"));
+        }
         Arc::new(Self { config, meta, source, shared, key, queue: tx })
     }
 
     /// Copyright notice returned by the provider (falls back to the configured one).
     pub fn copyright(&self) -> String {
-        let s = self.shared.lock().unwrap();
+        let s = self.shared.lock_or_recover();
         s.copyright.clone().filter(|c| !c.is_empty()).unwrap_or_else(|| self.config.copyright.clone())
     }
 
@@ -262,12 +271,15 @@ impl OnlineTranslation {
 
     /// Non-blocking: returns the chapter if cached, otherwise queues a fetch.
     pub fn chapter(&self, c: ChapterIdx) -> ChapterState {
-        let mut s = self.shared.lock().unwrap();
+        let mut s = self.shared.lock_or_recover();
         if let Some(pos) = s.mem.iter().position(|(ch, _, _)| *ch == c) {
-            let entry = s.mem.remove(pos).unwrap();
+            let Some(entry) = s.mem.remove(pos) else { return ChapterState::Pending };
             let t = entry.1.clone();
             s.mem.push_back(entry);
             return ChapterState::Ready(t);
+        }
+        if let Some(reason) = &s.dead {
+            return ChapterState::Failed(reason.clone());
         }
         if let Some((err, at)) = s.failed.get(&c)
             && at.elapsed() < Duration::from_secs(30)
@@ -286,7 +298,7 @@ impl OnlineTranslation {
     /// Records that a chapter was shown to the reader (FUMS for API.Bible), once per session.
     pub fn displayed(&self, c: ChapterIdx) {
         let token = {
-            let mut s = self.shared.lock().unwrap();
+            let mut s = self.shared.lock_or_recover();
             if !s.reported.insert(c) {
                 return;
             }
@@ -299,12 +311,12 @@ impl OnlineTranslation {
     }
 
     pub fn retry(&self, c: ChapterIdx) {
-        self.shared.lock().unwrap().failed.remove(&c);
+        self.shared.lock_or_recover().failed.remove(&c);
     }
 
     /// Records a failed fetch as the worker would (demo captures of the offline state).
     pub fn mark_failed(&self, c: ChapterIdx, message: &str) {
-        self.shared.lock().unwrap().failed.insert(c, (message.to_string(), Instant::now()));
+        self.shared.lock_or_recover().failed.insert(c, (message.to_string(), Instant::now()));
     }
 
     pub fn policy(&self) -> CachePolicy {
@@ -343,7 +355,7 @@ impl Worker {
             last = Some(Instant::now());
             let key = (self.key)().filter(|k| !k.is_empty());
             if key.is_none() && self.source.needs_key() {
-                self.shared.lock().unwrap().inflight.remove(&c);
+                self.shared.lock_or_recover().inflight.remove(&c);
                 continue;
             }
             match self.source.fetch(key.as_deref().unwrap_or(""), c) {
@@ -352,12 +364,12 @@ impl Worker {
                         let _ = cache.put(&self.id, c, &f.chapter, f.fums_token.as_deref(), policy);
                     }
                     if let Some(cr) = &f.copyright {
-                        self.shared.lock().unwrap().copyright = Some(cr.clone());
+                        self.shared.lock_or_recover().copyright = Some(cr.clone());
                     }
                     self.store(c, Arc::new(f.chapter), f.fums_token, policy);
                 }
                 Err(e) => {
-                    let mut s = self.shared.lock().unwrap();
+                    let mut s = self.shared.lock_or_recover();
                     s.inflight.remove(&c);
                     s.failed.insert(c, (format!("{e:#}"), Instant::now()));
                 }
@@ -367,7 +379,7 @@ impl Worker {
     }
 
     fn store(&self, c: ChapterIdx, t: Arc<Translation>, fums: Option<String>, policy: CachePolicy) {
-        let mut s = self.shared.lock().unwrap();
+        let mut s = self.shared.lock_or_recover();
         s.inflight.remove(&c);
         s.failed.remove(&c);
         s.mem.retain(|(ch, _, _)| *ch != c);
@@ -439,7 +451,7 @@ impl DiskCache {
         c: ChapterIdx,
         policy: CachePolicy,
     ) -> Result<Option<(Translation, Option<String>)>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock_or_recover();
         let cutoff = crate::study::now() - policy.max_age_secs;
         conn.execute("DELETE FROM chapters WHERE translation = ?1 AND fetched < ?2", params![id, cutoff])?;
         let row: Option<(Vec<u8>, Option<String>)> = conn
@@ -469,7 +481,7 @@ impl DiskCache {
             return Ok(());
         }
         let bytes = crate::format::encode(t, 3)?;
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock_or_recover();
         conn.execute(
             "INSERT OR REPLACE INTO chapters(translation, chapter, fetched, verses, payload, fums)
              VALUES(?1, ?2, ?3, ?4, ?5, ?6)",
@@ -497,7 +509,7 @@ impl DiskCache {
 
     /// The chapters kept for a translation and still fresh, the most recently fetched first.
     pub fn chapters(&self, id: &str, policy: CachePolicy) -> Vec<ChapterIdx> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock_or_recover();
         let cutoff = crate::study::now() - policy.max_age_secs;
         let Ok(mut st) = conn.prepare(
             "SELECT chapter FROM chapters WHERE translation = ?1 AND fetched >= ?2 ORDER BY fetched DESC, rowid DESC",
@@ -510,7 +522,7 @@ impl DiskCache {
     }
 
     pub fn stored_verses(&self, id: &str) -> usize {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock_or_recover();
         conn.query_row("SELECT COALESCE(SUM(verses), 0) FROM chapters WHERE translation = ?1", [id], |r| {
             r.get::<_, i64>(0)
         })
@@ -518,7 +530,7 @@ impl DiskCache {
     }
 
     pub fn clear(&self, id: &str) -> Result<()> {
-        self.conn.lock().unwrap().execute("DELETE FROM chapters WHERE translation = ?1", [id])?;
+        self.conn.lock_or_recover().execute("DELETE FROM chapters WHERE translation = ?1", [id])?;
         Ok(())
     }
 }
@@ -543,14 +555,14 @@ impl DailyBudget {
 
     /// Requests made today.
     pub fn used(&self) -> u32 {
-        let s = self.state.lock().unwrap();
+        let s = self.state.lock_or_recover();
         if s.0 == Self::today() { s.1 } else { 0 }
     }
 
     /// Counts one request, or fails without counting if `limit` were exceeded or the count
     /// couldn't be saved (a lost count would let the next launch go over the limit).
     pub fn spend(&self, limit: u32, what: &str) -> Result<()> {
-        let mut s = self.state.lock().unwrap();
+        let mut s = self.state.lock_or_recover();
         let today = Self::today();
         let saving = |e: std::io::Error, p: &Path| {
             anyhow::Error::new(e)

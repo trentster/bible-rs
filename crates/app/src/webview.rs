@@ -20,6 +20,7 @@ use std::time::{Duration, Instant};
 
 use bible_core::books::VerseRef;
 use bible_core::library::{Chapter, Library};
+use bible_core::sync::LockExt;
 use eframe::egui;
 
 use crate::objects::Object;
@@ -296,7 +297,7 @@ impl ObjectView {
             return;
         }
         if !self.is_open() {
-            *self.verses.lock().unwrap() = Arc::new(verses_json(object, library, translation));
+            *self.verses.lock_or_recover() = Arc::new(verses_json(object, library, translation));
             self.translation = translation.to_string();
             self.theme = Some(theme);
             self.opened = Some(Instant::now());
@@ -305,7 +306,7 @@ impl ObjectView {
             self.placed = Some((physical, true));
         }
         if self.translation != translation {
-            *self.verses.lock().unwrap() = Arc::new(verses_json(object, library, translation));
+            *self.verses.lock_or_recover() = Arc::new(verses_json(object, library, translation));
             self.translation = translation.to_string();
             self.script(&set_translation(translation));
         }
@@ -322,7 +323,7 @@ impl ObjectView {
 
     /// Takes the page's messages since the last frame.
     pub fn messages(&mut self) -> Vec<Message> {
-        let out = std::mem::take(&mut *self.inbox.lock().unwrap());
+        let out = std::mem::take(&mut *self.inbox.lock_or_recover());
         if out.contains(&Message::Ready) {
             if let Some(t) = self.opened.take() {
                 self.first_draw = Some(t.elapsed());
@@ -346,7 +347,7 @@ impl ObjectView {
         self.placed = None;
         self.opened = None;
         self.failed = false;
-        self.inbox.lock().unwrap().clear();
+        self.inbox.lock_or_recover().clear();
     }
 
     #[cfg(target_os = "macos")]
@@ -363,7 +364,7 @@ impl ObjectView {
         let ctx = ctx.clone();
         let paper = theme.palette().paper.to_array();
         let on_message = move |m| {
-            inbox.lock().unwrap().push(m);
+            inbox.lock_or_recover().push(m);
             ctx.request_repaint();
         };
         let built = builder(

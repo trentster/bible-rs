@@ -15,6 +15,7 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
+use bible_core::sync::LockExt;
 use eframe::egui;
 
 #[cfg(any(windows, test))]
@@ -106,7 +107,7 @@ struct Shared {
 static SHARED: Mutex<Shared> = Mutex::new(Shared::new());
 
 fn shared() -> MutexGuard<'static, Shared> {
-    SHARED.lock().unwrap_or_else(|e| e.into_inner())
+    SHARED.lock_or_recover()
 }
 
 /// Asks for a repaint, so an answer from a background thread shows.

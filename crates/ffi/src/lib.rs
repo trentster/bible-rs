@@ -16,6 +16,7 @@ use bible_core::library::{Chapter, Library};
 use bible_core::model::{Origin, Translation};
 use bible_core::search::{Query, Scope};
 use bible_core::study::{self, StudyStore};
+use bible_core::sync::LockExt;
 use bible_core::{BookId, ChapterIdx};
 
 pub mod content;
@@ -497,7 +498,7 @@ impl Bible {
     }
 
     fn study(&self) -> MutexGuard<'_, StudyStore> {
-        self.study.lock().unwrap_or_else(|e| e.into_inner())
+        self.study.lock_or_recover()
     }
 
     fn local(&self, id: &str) -> Result<Arc<Translation>, BibleError> {
