@@ -331,36 +331,35 @@ impl Listen {
             self.stop();
         }
 
+        // The stopwatch and its countdown are one control: a 14 pt glyph alone is a small target
+        // for someone reading in bed, and the time reads as the button's own label.
         let clock = self.clock_text(state);
-        // No timer armed: the stopwatch stands alone, with no countdown beside it.
         let clock_width = if clock.is_empty() {
             0.0
         } else {
             ui.painter().layout_no_wrap(clock.clone(), FontId::proportional(12.0), p.ink_2).size().x
         };
-        let clock_left = close_rect.left() - 20.0 - clock_width;
+        let group_right = close_rect.left() - 20.0;
+        let group_left = group_right - clock_width - if clock_width > 0.0 { 32.0 } else { 6.0 };
+        let group = Rect::from_min_max(
+            Pos2::new(group_left, cy - 15.0),
+            Pos2::new(group_right, cy + 15.0),
+        );
+        let timer = ui.interact(group, ui.id().with("read-aloud-timer"), Sense::click());
+        if timer.hovered() || self.timer_open {
+            ui.painter().rect_filled(group, 9.0, p.fill_strong);
+        }
+        let icon = Rect::from_center_size(Pos2::new(group_left + 13.0, cy), Vec2::splat(30.0));
+        stopwatch_icon(ui.painter(), icon, if self.timer_open { p.accent_quiet } else { p.ink_2 });
         if !clock.is_empty() {
             ui.painter().text(
-                Pos2::new(clock_left, cy),
-                Align2::LEFT_CENTER,
+                Pos2::new(group_right, cy),
+                Align2::RIGHT_CENTER,
                 clock,
                 FontId::proportional(12.0),
                 p.ink_2,
             );
         }
-
-        let timer_center = if clock_width > 0.0 { clock_left - 16.0 } else { clock_left - 15.0 };
-        let timer_rect =
-            Rect::from_center_size(Pos2::new(timer_center, cy), Vec2::splat(30.0));
-        let timer = ui.interact(timer_rect, ui.id().with("read-aloud-timer"), Sense::click());
-        if timer.hovered() || self.timer_open {
-            ui.painter().circle_filled(timer_rect.center(), 14.0, p.fill_strong);
-        }
-        stopwatch_icon(
-            ui.painter(),
-            timer_rect,
-            if self.timer_open { p.accent_quiet } else { p.ink_2 },
-        );
         if timer.clicked() {
             self.timer_open = !self.timer_open;
             self.touched(now);
