@@ -11,6 +11,15 @@ mod ui;
 pub use reading::{Reading, ReadingState};
 pub use ui::Listen;
 
+use bible_core::books::{ChapterIdx, VerseRef};
+
+/// What Listen reads: the passage the reader has selected, or else the chapter at the top of the
+/// view. A selection is the reader saying "here", and reading the chapter they scrolled past
+/// instead is the app ignoring them.
+pub fn chapter_to_read(selection: Option<(VerseRef, VerseRef)>, location: ChapterIdx) -> ChapterIdx {
+    selection.map_or(location, |(from, _)| from.chapter_idx())
+}
+
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, OnceLock};
@@ -119,4 +128,27 @@ pub fn play_for_test(pcm: &[f32]) -> Result<(), String> {
     let pcm = Arc::new(pcm.to_vec());
     let controls = Arc::new(player::Controls::default());
     player::play(&pcm, 24_000, &controls).map(|_| ())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bible_core::books::BookId;
+
+    fn ps(number: u8) -> ChapterIdx {
+        ChapterIdx::new(BookId::PSALMS, number).unwrap()
+    }
+
+    #[test]
+    fn a_selected_passage_says_where_to_read() {
+        // The reader scrolled ahead to Psalm 29 and selected text there while the top of the view
+        // still showed the end of Psalm 28. Listen must read 29.
+        let selected = (VerseRef::new(BookId::PSALMS, 29, 1), VerseRef::new(BookId::PSALMS, 29, 4));
+        assert_eq!(chapter_to_read(Some(selected), ps(28)), ps(29));
+    }
+
+    #[test]
+    fn with_nothing_selected_the_top_of_the_view_decides() {
+        assert_eq!(chapter_to_read(None, ps(28)), ps(28));
+    }
 }

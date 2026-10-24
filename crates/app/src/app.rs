@@ -1424,7 +1424,8 @@ impl BibleApp {
             return;
         }
         let now = ctx.input(|i| i.time);
-        let (chapter, _) = self.reader.location;
+        let chapter =
+            crate::read_aloud::chapter_to_read(self.reader.selection, self.reader.location.0);
         let Ok(text) = self.library.load(&self.settings.translation) else {
             return;
         };
