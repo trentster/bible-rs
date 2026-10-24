@@ -117,9 +117,9 @@ impl Listen {
 
     pub fn resume(&mut self, now: f64) {
         if let Some(reading) = &self.reading {
+            // Resuming puts the countdown back to the time it was holding, so a pause costs
+            // nothing but the pause.
             reading.resume();
-            // The countdown starts when play does, and runs on the clock from there.
-            reading.arm();
         }
         self.touched(now);
     }

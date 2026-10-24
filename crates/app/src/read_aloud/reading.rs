@@ -42,6 +42,9 @@ pub struct Reading {
     session: Arc<Mutex<Session>>,
     state: Arc<Mutex<ReadingState>>,
     deadline: Deadline,
+    /// What was left on the timer when the reader paused. A pause is a pause for the clock too, so
+    /// the countdown waits on this and the deadline is put back when play comes.
+    held: Arc<Mutex<Option<f32>>>,
 }
 
 impl Reading {
@@ -53,6 +56,7 @@ impl Reading {
         let session = Arc::new(Mutex::new(session));
         let state = Arc::new(Mutex::new(ReadingState::default()));
         let deadline: Deadline = Arc::new(Mutex::new(None));
+        let held: Arc<Mutex<Option<f32>>> = Arc::new(Mutex::new(None));
         {
             let session = session.clone();
             let state = state.clone();
@@ -60,18 +64,25 @@ impl Reading {
             let deadline = deadline.clone();
             std::thread::spawn(move || speak(session, controls, state, deadline, voice));
         }
-        Reading { controls, session, state, deadline }
+        Reading { controls, session, state, deadline, held }
     }
 
     /// Starts speaking `session` in `voice` on its own thread.
     pub fn start(session: Session, voice: Voice) -> Reading {
         let reading = Reading::open(session, voice);
         reading.resume();
-        reading.arm();
         reading
     }
 
     pub fn pause(&self) {
+        // The clock stops with the voice: what is left is held, and the deadline is taken away so
+        // nothing runs it down while the reader is away.
+        if let Some(left) = left_on(&self.deadline) {
+            if let Ok(mut held) = self.held.lock() {
+                *held = Some(left);
+            }
+            self.disarm();
+        }
         self.controls.set_paused(true);
         if let Ok(mut session) = self.session.lock() {
             session.pause();
@@ -88,6 +99,13 @@ impl Reading {
             state.speaking = true;
             state.finished = false;
         });
+        // Back to the time that was held, or — from a standing start — whatever the menu says.
+        let held = self.held.lock().ok().and_then(|held| *held);
+        let seconds = held.or_else(|| match self.sleep() {
+            Sleep::Minutes(minutes) => Some(minutes as f32 * 60.0),
+            Sleep::Off => None,
+        });
+        self.start_timer(seconds);
     }
 
     pub fn stop(&self) {
@@ -96,6 +114,9 @@ impl Reading {
             session.stop();
         }
         self.disarm();
+        if let Ok(mut held) = self.held.lock() {
+            *held = None;
+        }
         self.update(|state| {
             state.speaking = false;
             state.finished = true;
@@ -110,6 +131,15 @@ impl Reading {
         }
         if self.state().speaking {
             self.arm();
+        } else {
+            // Not playing yet: hold the time the choice buys, ready for play.
+            if let Ok(mut held) = self.held.lock() {
+                *held = match sleep {
+                    Sleep::Minutes(minutes) => Some(minutes as f32 * 60.0),
+                    Sleep::Off => None,
+                };
+            }
+            self.disarm();
         }
     }
 
@@ -124,7 +154,20 @@ impl Reading {
     /// Starts a countdown of `seconds` from this moment, whatever the menu's choices are: the menu
     /// deals in minutes, but the clock does not care.
     pub fn arm_for(&self, seconds: u64) {
-        let at = Instant::now() + Duration::from_secs(seconds);
+        self.start_timer(Some(seconds as f32));
+    }
+
+    /// Starts a countdown of `seconds` from this moment, or takes the timer away for `None`.
+    fn start_timer(&self, seconds: Option<f32>) {
+        if let Ok(mut held) = self.held.lock() {
+            *held = None;
+        }
+        let Some(seconds) = seconds else {
+            self.disarm();
+            return;
+        };
+        let seconds = Duration::from_secs_f32(seconds.max(0.0));
+        let at = Instant::now() + seconds;
         if let Ok(mut deadline) = self.deadline.lock() {
             *deadline = Some(at);
         }
@@ -134,7 +177,7 @@ impl Reading {
         let controls = self.controls.clone();
         let deadline = self.deadline.clone();
         std::thread::spawn(move || {
-            std::thread::sleep(Duration::from_secs(seconds));
+            std::thread::sleep(seconds);
             let run_out = deadline
                 .lock()
                 .ok()
@@ -155,7 +198,10 @@ impl Reading {
     /// What is left on the timer, or `None` when it is off. Straight off the clock, so it runs down
     /// smoothly whatever the voice is doing.
     pub fn left(&self) -> Option<f32> {
-        left_on(&self.deadline)
+        match self.held.lock().ok().and_then(|held| *held) {
+            Some(left) => Some(left),
+            None => left_on(&self.deadline),
+        }
     }
 
     pub fn sleep(&self) -> Sleep {
@@ -209,8 +255,8 @@ fn run(
         if controls.stopped() {
             break;
         }
-        // The timer is on the clock, so it runs whether or not the voice does: with nothing left,
-        // the reading ends where it stands, paused or mid-chapter.
+        // The timer stops with the voice, so a paused reading cannot run it out: this is the guard
+        // for a deadline that came due as the verse was ending.
         if left_on(deadline).is_some_and(|left| left <= 0.0) {
             break;
         }
