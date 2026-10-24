@@ -66,13 +66,13 @@ impl Listen {
         }
     }
 
-    /// Starts speaking a chapter, and raises the floating bar.
+    /// Opens the controls for a chapter without speaking: the reader presses play when ready.
     pub fn begin(&mut self, session: Session, voice: Voice, label: impl Into<String>, now: f64) {
         self.stop();
         self.preview = None;
         self.label = label.into();
         self.voice = voice.name.to_string();
-        self.reading = Some(Reading::start(session, voice));
+        self.reading = Some(Reading::open(session, voice));
         self.touched(now);
     }
 
@@ -304,7 +304,7 @@ impl Listen {
             ui.painter().text(
                 Pos2::new(rect.left() + 58.0, cy + 8.0),
                 Align2::LEFT_CENTER,
-                self.listening_text(),
+                self.listening_text(state),
                 FontId::proportional(10.5),
                 p.ink_2,
             );
@@ -332,19 +332,26 @@ impl Listen {
         }
 
         let clock = self.clock_text(state);
-        let clock_width =
-            ui.painter().layout_no_wrap(clock.clone(), FontId::proportional(12.0), p.ink_2).size().x;
+        // No timer armed: the stopwatch stands alone, with no countdown beside it.
+        let clock_width = if clock.is_empty() {
+            0.0
+        } else {
+            ui.painter().layout_no_wrap(clock.clone(), FontId::proportional(12.0), p.ink_2).size().x
+        };
         let clock_left = close_rect.left() - 20.0 - clock_width;
-        ui.painter().text(
-            Pos2::new(clock_left, cy),
-            Align2::LEFT_CENTER,
-            clock,
-            FontId::proportional(12.0),
-            p.ink_2,
-        );
+        if !clock.is_empty() {
+            ui.painter().text(
+                Pos2::new(clock_left, cy),
+                Align2::LEFT_CENTER,
+                clock,
+                FontId::proportional(12.0),
+                p.ink_2,
+            );
+        }
 
+        let timer_center = if clock_width > 0.0 { clock_left - 16.0 } else { clock_left - 15.0 };
         let timer_rect =
-            Rect::from_center_size(Pos2::new(clock_left - 16.0, cy), Vec2::splat(30.0));
+            Rect::from_center_size(Pos2::new(timer_center, cy), Vec2::splat(30.0));
         let timer = ui.interact(timer_rect, ui.id().with("read-aloud-timer"), Sense::click());
         if timer.hovered() || self.timer_open {
             ui.painter().circle_filled(timer_rect.center(), 14.0, p.fill_strong);
@@ -362,12 +369,20 @@ impl Listen {
 }
 
 impl Listen {
-    /// "Listening · Spencer", or just "Listening" before a voice has been named.
-    fn listening_text(&self) -> String {
-        if self.voice.is_empty() {
-            "Listening".to_string()
+    /// "Listening · Spencer", "Paused · Spencer" or "Ready · Spencer": what is actually happening,
+    /// because a bar that says Listening while silent is a lie.
+    fn listening_text(&self, state: &ReadingState) -> String {
+        let verb = if state.speaking {
+            "Listening"
+        } else if state.verse.is_some() {
+            "Paused"
         } else {
-            format!("Listening · {}", self.voice)
+            "Ready"
+        };
+        if self.voice.is_empty() {
+            verb.to_string()
+        } else {
+            format!("{verb} · {}", self.voice)
         }
     }
 
@@ -387,12 +402,12 @@ impl Listen {
         }
     }
 
-    /// The right-hand side of the hairline: the timer choice, then what is left of it.
+    /// The right-hand side of the hairline: the timer choice and what is left of it, or nothing at
+    /// all when no timer is armed — a reading with no timer has nothing to count down.
     fn right_text(&self, state: &ReadingState) -> String {
-        let choice = sleep_label(self.sleep());
         match state.remaining {
-            Some(left) => format!("{choice} · {} left", clock(left)),
-            None => choice,
+            Some(left) => format!("{} · {} left", sleep_label(self.sleep()), clock(left)),
+            None => String::new(),
         }
     }
 

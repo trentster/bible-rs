@@ -36,12 +36,11 @@ pub struct Reading {
 }
 
 impl Reading {
-    /// Starts speaking `session` in `voice` on its own thread.
-    pub fn start(mut session: Session, voice: Voice) -> Reading {
-        // A reading that has been started is a reading that is playing: the session hands out
-        // nothing until it is.
-        session.play();
+    /// Opens a reading without speaking: the reader gets the controls, then presses play.
+    pub fn open(mut session: Session, voice: Voice) -> Reading {
+        session.pause();
         let controls = Arc::new(Controls::default());
+        controls.set_paused(true);
         let session = Arc::new(Mutex::new(session));
         let state = Arc::new(Mutex::new(ReadingState::default()));
         {
@@ -51,6 +50,13 @@ impl Reading {
             std::thread::spawn(move || speak(session, controls, state, voice));
         }
         Reading { controls, session, state }
+    }
+
+    /// Starts speaking `session` in `voice` on its own thread.
+    pub fn start(session: Session, voice: Voice) -> Reading {
+        let reading = Reading::open(session, voice);
+        reading.resume();
+        reading
     }
 
     pub fn pause(&self) {
