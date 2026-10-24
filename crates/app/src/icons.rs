@@ -736,3 +736,49 @@ pub fn dot(p: &Painter, center: Pos2, radius: f32, c: Color32) {
 pub fn icon_rect(center: Pos2, size: f32) -> Rect {
     Rect::from_center_size(center, vec2(size, size))
 }
+
+/// A stopwatch: circle, two hands, a crown. Unmistakable at 14 pt, unlike an hourglass.
+pub fn stopwatch(p: &Painter, r: Rect, c: Color32) {
+    let stroke = Stroke::new(1.3, c);
+    let centre = Pos2::new(r.center().x, r.center().y + 1.2);
+    let radius = 5.3;
+    p.circle_stroke(centre, radius, stroke);
+    // The hands, at twelve and four.
+    p.line_segment([centre, Pos2::new(centre.x, centre.y - 3.4)], stroke);
+    p.line_segment([centre, Pos2::new(centre.x + 2.5, centre.y + 0.4)], stroke);
+    // The crown on top.
+    p.line_segment(
+        [Pos2::new(centre.x, centre.y - radius - 2.4), Pos2::new(centre.x, centre.y - radius)],
+        stroke,
+    );
+    p.line_segment(
+        [
+            Pos2::new(centre.x - 2.2, centre.y - radius - 2.4),
+            Pos2::new(centre.x + 2.2, centre.y - radius - 2.4),
+        ],
+        stroke,
+    );
+}
+
+/// A cross: what closes the reading bar.
+pub fn cross(p: &Painter, r: Rect, c: Color32) {
+    let centre = r.center();
+    let arm = 5.0;
+    let stroke = Stroke::new(1.6, c);
+    p.line_segment(
+        [Pos2::new(centre.x - arm, centre.y - arm), Pos2::new(centre.x + arm, centre.y + arm)],
+        stroke,
+    );
+    p.line_segment(
+        [Pos2::new(centre.x + arm, centre.y - arm), Pos2::new(centre.x - arm, centre.y + arm)],
+        stroke,
+    );
+}
+
+/// A tick at the right-hand end of the row it belongs to: the timer choice in force.
+pub fn tick(p: &Painter, r: Rect, c: Color32) {
+    let foot = Pos2::new(r.right() - 18.0, r.center().y);
+    let stroke = Stroke::new(1.7, c);
+    p.line_segment([Pos2::new(foot.x - 4.5, foot.y), Pos2::new(foot.x - 1.0, foot.y + 3.5)], stroke);
+    p.line_segment([Pos2::new(foot.x - 1.0, foot.y + 3.5), Pos2::new(foot.x + 5.0, foot.y - 3.5)], stroke);
+}

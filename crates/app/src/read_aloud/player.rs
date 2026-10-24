@@ -40,11 +40,6 @@ impl Controls {
     pub fn stop(&self) {
         self.stopped.store(true, Ordering::Relaxed);
     }
-
-    /// Clears a stop so the next utterance can be played.
-    pub fn resume_after_stop(&self) {
-        self.stopped.store(false, Ordering::Relaxed);
-    }
 }
 
 /// Fills `out` from `samples` starting at `position`, obeying pause and stop.

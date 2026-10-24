@@ -6,10 +6,11 @@
 //! the bottom edge with two pieces of small grey text. Touching the line brings the controls back in
 //! the same place, so nothing jumps.
 
-use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Sense, Stroke, Ui, Vec2};
+use eframe::egui::{self, Align2, FontId, Pos2, Rect, Sense, Stroke, Ui, Vec2};
 
 use bible_core::speak::{Session, Sleep, Voice};
 
+use super::countdown::{clock, Countdown};
 use super::reading::{Reading, ReadingState};
 use crate::theme::Palette;
 
@@ -38,14 +39,8 @@ pub struct Listen {
     menu_rect: Rect,
     /// A state painted without any sound, so the bar can be photographed in the harness.
     preview: Option<ReadingState>,
-    /// What the worker last reported, and when: a change means a fresh number to count down from.
-    counted_at_publish: Option<f32>,
-    /// What is left, followed at the rate the voice speaks between those reports.
-    left: Option<f32>,
-    /// How much of the voice had been heard when `left` was last taken from a report.
-    heard_at_publish: f32,
-    /// The number to paint: the followed count, or nothing when no timer is armed.
-    shown: Option<f32>,
+    /// What is left of the sleep timer, kept honest against the audio actually heard.
+    countdown: Countdown,
 }
 
 impl Listen {
@@ -59,10 +54,7 @@ impl Listen {
             timer_anchor: Rect::NOTHING,
             menu_rect: Rect::NOTHING,
             preview: None,
-            counted_at_publish: None,
-            left: None,
-            heard_at_publish: 0.0,
-            shown: None,
+            countdown: Countdown::new(),
         }
     }
 
@@ -91,7 +83,7 @@ impl Listen {
         self.label = label.into();
         self.voice = voice.name.to_string();
         self.reading = Some(Reading::open(session, voice));
-        self.recount();
+        self.countdown.rebase();
         self.touched(now);
     }
 
@@ -140,7 +132,7 @@ impl Listen {
             reading.set_sleep(sleep);
         }
         // A timer just armed is allowed to put the number up: everything else may only take it down.
-        self.recount();
+        self.countdown.rebase();
         self.touched(now);
     }
 
@@ -157,7 +149,7 @@ impl Listen {
         }
         let state = self.state();
         let heard = self.reading.as_ref().map_or(0.0, |reading| reading.heard());
-        self.follow_countdown(&state, heard);
+        self.countdown.follow(&state, heard);
         // A failure is worth saying even though the reading has already stopped: silence would read
         // as a dead button.
         if let Some(note) = &state.note {
@@ -367,7 +359,7 @@ impl Listen {
         if close.hovered() {
             ui.painter().circle_filled(close_rect.center(), 14.0, p.fill_strong);
         }
-        close_icon(ui.painter(), close_rect, p.ink_2);
+        crate::icons::cross(ui.painter(), close_rect, p.ink_2);
         if close.clicked() {
             self.stop();
         }
@@ -399,7 +391,7 @@ impl Listen {
         // Grey until a time has been set, then the quiet navy: the same rule as the toolbar
         // speaker — tinted means there is something in effect.
         let armed = !clock.is_empty();
-        stopwatch_icon(ui.painter(), icon, if armed { p.accent_quiet } else { p.ink_2 });
+        crate::icons::stopwatch(ui.painter(), icon, if armed { p.accent_quiet } else { p.ink_2 });
         if !clock.is_empty() {
             ui.painter().text(
                 Pos2::new(group_right, cy),
@@ -442,52 +434,15 @@ impl Listen {
         }
     }
 
-    /// The worker reports what is left of the reading once per verse, so a countdown driven by
-    /// those reports alone would sit still and then drop four or five seconds at a time. Between
-    /// them it is followed against the audio the speakers have actually taken — not the clock on the
-    /// wall, which keeps running while the next verse is being made and so ran ahead of the truth,
-    /// making the number step backwards when the next report arrived.
-    fn follow_countdown(&mut self, state: &ReadingState, heard: f32) {
-        if state.remaining != self.counted_at_publish {
-            let report = state.remaining;
-            self.left = match (self.left, report) {
-                // A clock that steps up is a clock nobody trusts: a fresh report may only take the
-                // number down. Arming a timer or opening another chapter clears this first.
-                (Some(shown), Some(fresh)) => Some(shown.min(fresh)),
-                (_, fresh) => fresh,
-            };
-            self.counted_at_publish = report;
-            self.heard_at_publish = heard;
-        }
-        let Some(base) = self.left else {
-            self.shown = None;
-            return;
-        };
-        let spoken = (heard - self.heard_at_publish).max(0.0);
-        self.shown = Some((base - spoken).max(0.0));
-    }
-
-    /// Starts the countdown again from scratch: a new reading, or a timer just armed, is allowed to
-    /// put the number up where a report mid-reading is not.
-    fn recount(&mut self) {
-        self.counted_at_publish = None;
-        self.left = None;
-        self.shown = None;
-        self.heard_at_publish = 0.0;
-    }
-
     /// Beside the stopwatch: what is left of the sleep timer, as a clock.
     fn clock_text(&self, state: &ReadingState) -> String {
-        match self.shown.or(state.remaining) {
-            Some(left) => clock(left),
-            None => String::new(),
-        }
+        self.countdown.text(state)
     }
 
     /// The right-hand side of the hairline: the timer choice and what is left of it, or nothing at
     /// all when no timer is armed — a reading with no timer has nothing to count down.
     fn right_text(&self, state: &ReadingState) -> String {
-        match self.shown.or(state.remaining) {
+        match self.countdown.left(state) {
             Some(left) => format!("{} · {} left", sleep_label(self.sleep()), clock(left)),
             None => String::new(),
         }
@@ -552,7 +507,7 @@ impl Listen {
                 if on { p.accent } else { p.ink },
             );
             if on {
-                tick_icon(ui.painter(), row_rect, p.accent);
+                crate::icons::tick(ui.painter(), row_rect, p.accent);
             }
             if resp.clicked() {
                 self.set_sleep(*sleep, now);
@@ -570,60 +525,11 @@ fn sleep_label(sleep: Sleep) -> String {
     }
 }
 
-/// Seconds as a clock: `14:52`, or `1:04:10` past an hour.
-fn clock(seconds: f32) -> String {
-    let total = seconds.max(0.0).round() as u32;
-    let (hours, minutes, secs) = (total / 3600, (total % 3600) / 60, total % 60);
-    if hours > 0 {
-        format!("{hours}:{minutes:02}:{secs:02}")
-    } else {
-        format!("{minutes}:{secs:02}")
-    }
-}
-
-/// A stopwatch: circle, two hands, a crown. Unmistakable at 14 pt, unlike an hourglass.
-fn stopwatch_icon(painter: &egui::Painter, rect: Rect, color: Color32) {
-    let stroke = Stroke::new(1.3, color);
-    let c = Pos2::new(rect.center().x, rect.center().y + 1.2);
-    let r = 5.3;
-    painter.circle_stroke(c, r, stroke);
-    // The hands, at twelve and four.
-    painter.line_segment([c, Pos2::new(c.x, c.y - 3.4)], stroke);
-    painter.line_segment([c, Pos2::new(c.x + 2.5, c.y + 0.4)], stroke);
-    // The crown on top.
-    painter.line_segment([Pos2::new(c.x, c.y - r - 2.4), Pos2::new(c.x, c.y - r)], stroke);
-    painter.line_segment(
-        [Pos2::new(c.x - 2.2, c.y - r - 2.4), Pos2::new(c.x + 2.2, c.y - r - 2.4)],
-        stroke,
-    );
-}
-
-fn close_icon(painter: &egui::Painter, rect: Rect, color: Color32) {
-    let c = rect.center();
-    let d = 5.0;
-    let stroke = Stroke::new(1.6, color);
-    painter.line_segment([Pos2::new(c.x - d, c.y - d), Pos2::new(c.x + d, c.y + d)], stroke);
-    painter.line_segment([Pos2::new(c.x + d, c.y - d), Pos2::new(c.x - d, c.y + d)], stroke);
-}
-
-fn tick_icon(painter: &egui::Painter, rect: Rect, color: Color32) {
-    let c = Pos2::new(rect.right() - 18.0, rect.center().y);
-    let stroke = Stroke::new(1.7, color);
-    painter.line_segment([Pos2::new(c.x - 4.5, c.y), Pos2::new(c.x - 1.0, c.y + 3.5)], stroke);
-    painter.line_segment([Pos2::new(c.x - 1.0, c.y + 3.5), Pos2::new(c.x + 5.0, c.y - 3.5)], stroke);
-}
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[test]
-    fn a_clock_reads_as_minutes_and_seconds() {
-        assert_eq!(clock(892.0), "14:52");
-        assert_eq!(clock(9.4), "0:09");
-        assert_eq!(clock(3842.0), "1:04:02");
-        assert_eq!(clock(-5.0), "0:00");
-    }
 
     #[test]
     fn the_sleep_choices_are_worded_for_the_bar() {
@@ -641,45 +547,6 @@ mod tests {
         assert_eq!(listen.where_is(&before), "Psalms 23");
     }
 
-    #[test]
-    fn the_countdown_runs_down_between_verse_reports() {
-        // The worker reports once per verse, and the number is followed between reports against the
-        // audio that has actually played — so it never sits still and, above all, never counts up.
-        let mut listen = Listen::new();
-        let mut state = ReadingState { remaining: Some(60.0), speaking: true, ..Default::default() };
-        listen.follow_countdown(&state, 0.0);
-        assert_eq!(listen.clock_text(&state), "1:00");
-        listen.follow_countdown(&state, 1.0);
-        assert_eq!(listen.clock_text(&state), "0:59");
-        listen.follow_countdown(&state, 2.0);
-        assert_eq!(listen.clock_text(&state), "0:58");
-        // A verse is being made, so no audio has played: the number holds rather than running on.
-        listen.follow_countdown(&state, 2.0);
-        assert_eq!(listen.clock_text(&state), "0:58");
-        // The next report is the truth and agrees: it may not lift the number back to 59.
-        state.remaining = Some(58.4);
-        listen.follow_countdown(&state, 2.0);
-        assert_eq!(listen.clock_text(&state), "0:58");
-        // A report can only take it down.
-        state.remaining = Some(51.0);
-        listen.follow_countdown(&state, 9.0);
-        assert_eq!(listen.clock_text(&state), "0:51");
-        // Paused: no audio plays, so the number stops with the voice.
-        state.speaking = false;
-        listen.follow_countdown(&state, 9.0);
-        assert_eq!(listen.clock_text(&state), "0:51");
-    }
 
-    #[test]
-    fn arming_a_timer_may_put_the_countdown_up() {
-        let mut listen = Listen::new();
-        let state = ReadingState { remaining: Some(60.0), speaking: true, ..Default::default() };
-        listen.follow_countdown(&state, 0.0);
-        assert_eq!(listen.clock_text(&state), "1:00");
-        listen.set_sleep(Sleep::Minutes(30), 0.0);
-        let longer = ReadingState { remaining: Some(1800.0), ..state.clone() };
-        listen.follow_countdown(&longer, 0.0);
-        assert_eq!(listen.clock_text(&longer), "30:00");
-    }
 }
 
