@@ -123,6 +123,7 @@ pub enum SidebarTab {
 pub enum SettingsTab {
     #[default]
     Reading,
+    ReadAloud,
     Appearance,
     Translations,
     Shortcuts,

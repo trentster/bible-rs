@@ -64,6 +64,9 @@ pub struct Settings {
     pub onboarded: bool,
     /// Books pinned above the testaments in the sidebar, in the order they were pinned.
     pub pinned_books: Vec<u8>,
+    /// Read aloud: the name of the chosen voice. Empty means the default for this app.
+    #[serde(default)]
+    pub speak_voice: String,
 }
 
 fn yes() -> bool {
@@ -99,6 +102,7 @@ impl Default for Settings {
             share: Default::default(),
             onboarded: false,
             pinned_books: Vec::new(),
+            speak_voice: String::new(),
         }
     }
 }
@@ -144,6 +148,12 @@ impl Settings {
         if let Ok(s) = serde_json::to_string(self) {
             let _ = study.set_setting("app", &s);
         }
+    }
+
+    /// The voice read aloud uses: the reader's choice, or the default until they make one.
+    pub fn voice(&self) -> bible_core::speak::Voice {
+        bible_core::speak::Voice::by_name(&self.speak_voice)
+            .unwrap_or_else(|| bible_core::speak::Voice::for_locale(""))
     }
 }
 
@@ -1188,6 +1198,7 @@ impl BibleApp {
             "update" => crate::updater::demo(arg, true),
             "update-about" => crate::updater::demo(arg, false),
             "settings" => actions.push(Action::OpenSettings(match arg {
+                "read-aloud" => SettingsTab::ReadAloud,
                 "translations" => SettingsTab::Translations,
                 "data" => SettingsTab::Data,
                 "appearance" => SettingsTab::Appearance,

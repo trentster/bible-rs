@@ -30,8 +30,9 @@ const MARGIN: f32 = 32.0;
 
 type IconFn = fn(&Painter, Rect, Color32);
 
-const TABS: [(SettingsTab, &str, IconFn); 6] = [
+const TABS: [(SettingsTab, &str, IconFn); 7] = [
     (SettingsTab::Reading, "Reading", icons::text_size),
+    (SettingsTab::ReadAloud, "Read aloud", icons::speaker),
     (SettingsTab::Appearance, "Appearance", icons::sun),
     (SettingsTab::Translations, "Translations", icons::book),
     (SettingsTab::Shortcuts, "Shortcuts", icons::keyboard),
@@ -631,6 +632,7 @@ impl SettingsUi {
                         ui.spacing_mut().item_spacing.y = 0.0;
                         match self.tab {
                             SettingsTab::Reading => reading(ui, library, settings, actions),
+                            SettingsTab::ReadAloud => read_aloud(ui, settings),
                             SettingsTab::Appearance => appearance(ui, settings, actions),
                             SettingsTab::Translations => {
                                 self.translations(ui, library, settings, actions, tx, import)
@@ -1613,6 +1615,58 @@ fn theme_cards(ui: &mut Ui, settings: &mut Settings, actions: &mut Vec<Action>) 
         }
     }
 }
+/// Appearance (frame 24): theme, accent colour, the toolbar's translation, the sidebar; names
+/// for the highlight colours; motion.
+/// Read aloud (voice): four voices, one pace, chosen by name and described plainly.
+fn read_aloud(ui: &mut Ui, settings: &mut Settings) {
+    let p = settings.theme.palette();
+    group_title(ui, p, "Voice");
+    let voices = bible_core::speak::VOICES;
+    let current = settings.voice().name;
+    let mut chosen: Option<&'static str> = None;
+    let rows = vec![64.0; voices.len()];
+    rows_card(ui, p, &rows, |ui, i, r| {
+        let voice = voices[i];
+        let resp = ui.interact(r, ui.id().with(("voice", i)), Sense::click());
+        if let Some(fill) = widgets::hover_fill(ui, &resp, p, false) {
+            ui.painter().rect_filled(r.shrink2(vec2(6.0, 3.0)), 8.0, fill);
+        }
+        row_label(ui, p, r, voice.name, Some(&voice.describe()));
+        // Hear it before choosing: the sample is made on this device, and cached after one press.
+        #[cfg(feature = "speak")]
+        {
+            let spot = Rect::from_center_size(pos2(r.right() - 64.0, r.center().y), vec2(32.0, 32.0));
+            let press = ui.interact(spot, ui.id().with(("voice-play", i)), Sense::click());
+            let fill = if press.hovered() { p.raised } else { p.fill };
+            ui.painter().circle_filled(spot.center(), 16.0, fill);
+            let ink = if press.hovered() { p.ink } else { p.ink_2 };
+            icons::play(ui.painter(), Rect::from_center_size(spot.center(), vec2(15.0, 15.0)), ink);
+            if press.clicked() {
+                crate::read_aloud::play_sample(voice);
+            }
+        }
+        let c = pos2(r.right() - 30.0, r.center().y);
+        if voice.name == current {
+            ui.painter().circle_stroke(c, 7.0, Stroke::new(1.5, p.accent));
+            ui.painter().circle_filled(c, 3.75, p.accent);
+        } else {
+            ui.painter().circle_stroke(c, 7.0, Stroke::new(1.0, p.border));
+        }
+        if resp.clicked() {
+            chosen = Some(voice.name);
+        }
+    });
+    if let Some(name) = chosen {
+        settings.speak_voice = name.to_string();
+    }
+    footnote(
+        ui,
+        p,
+        "Spoken on this device, with no connection. All four voices read at the same pace, so \
+         changing voice does not change the speed.",
+    );
+}
+
 /// Appearance (frame 24): theme, accent colour, the toolbar's translation, the sidebar; names
 /// for the highlight colours; motion.
 fn appearance(ui: &mut Ui, settings: &mut Settings, actions: &mut Vec<Action>) {

@@ -456,6 +456,21 @@ pub fn sun(p: &Painter, r: Rect, c: Color32) {
     }
 }
 
+/// A play triangle (hear a voice).
+pub fn play(p: &Painter, r: Rect, c: Color32) {
+    let g = Grid::new(p, r, c);
+    g.polyline(vec![g.p(7.0, 4.5), g.p(15.0, 10.0), g.p(7.0, 15.5), g.p(7.0, 4.5)], true);
+}
+
+/// A speaker (read aloud).
+pub fn speaker(p: &Painter, r: Rect, c: Color32) {
+    let g = Grid::new(p, r, c);
+    g.rect(2.5, 7.5, 3.5, 5.0, 1.0);
+    g.polyline(vec![g.p(6.0, 10.0), g.p(11.0, 5.0), g.p(11.0, 15.0), g.p(6.0, 10.0)], true);
+    g.line(&[(13.25, 7.75), (14.5, 10.0), (13.25, 12.25)]);
+    g.line(&[(15.75, 5.75), (17.5, 10.0), (15.75, 14.25)]);
+}
+
 /// A keyboard (shortcuts).
 pub fn keyboard(p: &Painter, r: Rect, c: Color32) {
     let g = Grid::new(p, r, c);

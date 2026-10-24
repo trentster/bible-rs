@@ -48,4 +48,14 @@ impl Voice {
     pub fn by_name(name: &str) -> Option<Voice> {
         VOICES.iter().copied().find(|v| v.name.eq_ignore_ascii_case(name))
     }
+
+    /// "English (US) · male", the second line of a settings row.
+    pub fn describe(self) -> String {
+        let place = match self.accent {
+            Accent::UnitedStates => "US",
+            Accent::UnitedKingdom => "UK",
+        };
+        let sex = if self.female { "female" } else { "male" };
+        format!("English ({place}) · {sex}")
+    }
 }

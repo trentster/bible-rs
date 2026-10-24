@@ -15,8 +15,9 @@ name = "bible-rs"
 path = "src/main.rs"
 
 [features]
-# Read Aloud: the on-device voice. Optional so the default build carries neither the dependency nor
-# the 62 MB of model weights.
+default = ["speak"]
+# Read aloud: the on-device voice. Optional so a build can leave out the dependency and the 62 MB
+# of model weights.
 speak = ["dep:ptts", "dep:cpal"]
 
 [[example]]
