@@ -201,16 +201,49 @@ mod bundled {
     use std::collections::HashMap;
     use std::sync::OnceLock;
 
-    macro_rules! tsv {
+    /// The bundled tables, compressed with zstd exactly as the translations are: the C library in a
+    /// native build, the pure-Rust decoder in the browser. Unpacking waits for the first lookup, so
+    /// 13 MB of dictionary costs nothing on the way to a first painted frame.
+    macro_rules! lex {
         ($id:literal) => {
-            include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../data/lexicon/", $id, ".tsv"))
+            include_bytes!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../../data/lexicon/",
+                $id,
+                ".tsv.zst"
+            )) as &[u8]
         };
     }
 
-    static EASTON: &str = tsv!("easton");
-    static WORDNET: &str = tsv!("wordnet");
-    static ALIASES: &str = tsv!("aliases");
-    static FORMS: &str = tsv!("wordnet-forms");
+    static EASTON: &[u8] = lex!("easton");
+    static WORDNET: &[u8] = lex!("wordnet");
+    static FORMS: &[u8] = lex!("wordnet-forms");
+    /// Hand-edited source data, a couple of kilobytes: kept as text so an edit can never leave a
+    /// stale compressed copy behind for the app to use.
+    static ALIASES: &str = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../data/lexicon/aliases.tsv"
+    ));
+
+    /// One compressed table, unpacked to text. A table that will not unpack leaves the dictionary
+    /// empty and says so, rather than taking the app down in front of a reader.
+    fn unpack(data: &[u8]) -> String {
+        use std::io::Read;
+        let mut out = Vec::new();
+        #[cfg(not(target_arch = "wasm32"))]
+        let unpacked = zstd::stream::read::Decoder::with_buffer(data)
+            .and_then(|mut decoder| decoder.read_to_end(&mut out));
+        #[cfg(target_arch = "wasm32")]
+        let unpacked = match ruzstd::decoding::StreamingDecoder::new(data) {
+            Ok(mut decoder) => decoder.read_to_end(&mut out),
+            Err(e) => Err(std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string())),
+        };
+        if let Err(e) = unpacked {
+            eprintln!("lexicon: a bundled table would not unpack: {e}");
+            return String::new();
+        }
+        String::from_utf8_lossy(&out).into_owned()
+    }
 
     /// One spelling the text uses, and the headword the dictionary files it under.
     #[derive(Clone, Debug)]
@@ -261,13 +294,17 @@ mod bundled {
         })
     }
 
-    fn parsed(once: &'static OnceLock<Lexicon>, text: &str) -> &'static Lexicon {
-        once.get_or_init(|| match Lexicon::parse(text) {
-            Ok(lexicon) => lexicon,
-            Err(e) => {
-                // Loud once, then empty: a broken build-time file must not panic in front of a reader.
-                eprintln!("lexicon: a bundled dictionary would not parse: {e}");
-                Lexicon::none()
+    fn parsed(once: &'static OnceLock<Lexicon>, data: &[u8]) -> &'static Lexicon {
+        once.get_or_init(|| {
+            let text = unpack(data);
+            match Lexicon::parse(&text) {
+                Ok(lexicon) => lexicon,
+                Err(e) => {
+                    // Loud once, then empty: a broken build-time file must not panic in front of a
+                    // reader.
+                    eprintln!("lexicon: a bundled dictionary would not parse: {e}");
+                    Lexicon::none()
+                }
             }
         })
     }
@@ -287,7 +324,7 @@ mod bundled {
         static ONCE: OnceLock<HashMap<String, String>> = OnceLock::new();
         ONCE.get_or_init(|| {
             let mut map = HashMap::new();
-            for line in FORMS.lines() {
+            for line in unpack(FORMS).lines() {
                 let line = line.trim_end();
                 if line.is_empty() || line.starts_with('#') {
                     continue;

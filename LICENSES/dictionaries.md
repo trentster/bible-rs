@@ -43,9 +43,11 @@ state:
   used as comes first;
 - one definition line per sense, prefixed `n.`, `v.`, `adj.` or `adv.`, and truncated at 160
   characters on a word boundary (marked with `…`) to stay one short line in the popover;
-- irregular inflections are extracted into their own table (`wordnet-forms.tsv`, 4,389 forms,
+- irregular inflections are extracted into their own table (`wordnet-forms.tsv.zst`, 4,389 forms,
   form → lemma) so *went*, *feet* and *best* reach *go*, *foot* and *good*;
-- the result is plain TSV: `data/lexicon/wordnet.tsv`, 127,981 words, 13,242,890 bytes.
+- the result is plain TSV, then zstd-compressed exactly as the translations are: `data/lexicon/wordnet.tsv.zst`, **2,307,859 bytes** for 127,981 words (13,242,890 bytes of text). Easton's is 738,281 bytes for its 3,963 entries; the 4,389 forms are 20,094 bytes. The plain `.tsv` is deleted by the build rather than left beside the compressed copy, so two versions cannot drift apart. The hand-edited `aliases.tsv` stays plain text: at 1,282 bytes it is not worth a stale-copy risk.
+
+Unpacking is deferred: the tables are decompressed and indexed inside the **first `define()` call**, never on the startup path. Measured on the development Mac (release build): first lookup of an ordinary word **102 ms**, first lookup of a Bible word another **7.8 ms**, and every lookup after that **0.2 µs** off a built index.
 
 No definitions are added, removed or rewritten.
 

@@ -363,8 +363,7 @@ fn build_lexicon(root: &Path, ids: &[String]) -> Result<()> {
             let body = body.replace('\t', " ").replace('\n', "\\n");
             out.push_str(&format!("{}\t{headword}\t{body}\n", d.id));
         }
-        let path = out_dir.join(format!("{}.tsv", d.id));
-        std::fs::write(&path, &out)?;
+        let path = write_compressed(&out_dir, &format!("{}.tsv", d.id), out.as_bytes())?;
         println!(
             "{:<28} {:>5} entries  {} with no definition  {:>5.2} MB → {}",
             d.name,
@@ -442,8 +441,8 @@ fn build_wordnet(root: &Path) -> Result<()> {
     let (lexicon, forms) = wordnet::convert(&archive)?;
     let out = root.join("data/lexicon");
     std::fs::create_dir_all(&out)?;
-    std::fs::write(out.join("wordnet.tsv"), &lexicon)?;
-    std::fs::write(out.join("wordnet-forms.tsv"), &forms)?;
+    write_compressed(&out, "wordnet.tsv", lexicon.as_bytes())?;
+    write_compressed(&out, "wordnet-forms.tsv", forms.as_bytes())?;
     println!(
         "Open English WordNet  {:>6} words {:>6} forms  {:>5.2} MB → {}",
         lexicon.lines().count().saturating_sub(3),
@@ -452,6 +451,20 @@ fn build_wordnet(root: &Path) -> Result<()> {
         out.join("wordnet.tsv").display()
     );
     Ok(())
+}
+
+/// Writes a bundled table compressed with zstd — the same compression the translations use, so the
+/// app carries one decoder and the plain text never sits in the binary or the repo. The plain `.tsv`
+/// is refused rather than left behind: two copies of 13 MB drift apart.
+fn write_compressed(dir: &Path, name: &str, text: &[u8]) -> Result<std::path::PathBuf> {
+    let path = dir.join(format!("{name}.zst"));
+    let compressed = zstd::bulk::compress(text, 19)?;
+    std::fs::write(&path, &compressed)?;
+    let plain = dir.join(name);
+    if plain.exists() {
+        std::fs::remove_file(&plain)?;
+    }
+    Ok(path)
 }
 
 fn hex(bytes: &[u8]) -> String {

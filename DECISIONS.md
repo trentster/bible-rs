@@ -604,10 +604,11 @@ prototype.
   words; Easton's 1897 supplies Bible names and places, and only its opening sentences. Nothing here
   reaches the Hebrew or Greek, so a reader looking up "propitiation" learns what the English word
   means, not what the underlying Greek does: no Strong's numbers, no lemmas, no concordance. That
-  study stays parked. Two costs are accepted: the app carries **13.2 MB** of WordNet text (against
-  2.6 MB for Easton's alone), and WordNet's own definitions are sometimes clumsier than a purpose-
-  written Bible glossary ("a member of a group of Jews who…"), with Easton's dated wording as the
-  fallback rather than as the main voice.
+  study stays parked. Two costs are accepted: the app carries **3.07 MB** of compressed WordNet text
+  (2.24 MB WordNet, 0.74 MB Easton's; 15.9 MB uncompressed), and WordNet's own definitions are
+  sometimes clumsier than a purpose-written Bible glossary ("a member of a group of Jews who…"),
+  with Easton's dated wording as the fallback rather than as the main voice. The tables are unpacked
+  on the first lookup, which costs about 100 ms once.
 - **Word lookup refuses to guess.** A spelling the dictionary does not carry says so, unless the
   curated table maps it to a headword; there is no fuzzy or edit-distance matching anywhere in the
   lookup, so a reader is never shown a definition for a different word. The price is that KJV
