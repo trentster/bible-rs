@@ -264,13 +264,36 @@ impl Listen {
             FontId::proportional(11.5),
             p.ink_2,
         );
-        ui.painter().text(
-            Pos2::new(rect.right() - INSET, cy),
-            Align2::RIGHT_CENTER,
-            self.right_text(state),
-            FontId::proportional(11.5),
-            p.ink_3,
-        );
+        // The countdown on this line is painted in fixed pieces — a monospaced clock in a slot that
+        // never changes width — so a changing number cannot shuffle the words beside it.
+        if let Some(left) = self.left() {
+            let font = FontId::proportional(11.5);
+            let clock_font = FontId::monospace(11.5);
+            let ink = p.ink_3;
+            let width = |text: &str, font: FontId| {
+                ui.painter().layout_no_wrap(text.to_string(), font, ink).size().x
+            };
+            let slot = width("88:88", clock_font.clone());
+            let tail = " left";
+            let tail_width = width(tail, font.clone());
+            let right = rect.right() - INSET;
+            ui.painter().text(Pos2::new(right, cy), Align2::RIGHT_CENTER, tail, font.clone(), ink);
+            ui.painter().text(
+                Pos2::new(right - tail_width, cy),
+                Align2::RIGHT_CENTER,
+                clock(left),
+                clock_font,
+                ink,
+            );
+            let label = format!("{} ·", sleep_label(self.sleep()));
+            ui.painter().text(
+                Pos2::new(right - tail_width - slot - 6.0, cy),
+                Align2::RIGHT_CENTER,
+                label,
+                font,
+                ink,
+            );
+        }
     }
 
     /// Pause, where it is, the sleep timer and a close — laid out either in the pill or in the line.
@@ -428,15 +451,6 @@ impl Listen {
         self.left().map(clock).unwrap_or_default()
     }
 
-    /// The right-hand side of the hairline: the timer choice and what is left of it, or nothing at
-    /// all when no timer is armed — a reading with no timer has nothing to count down.
-    fn right_text(&self, _state: &ReadingState) -> String {
-        match self.left() {
-            Some(left) => format!("{} · {} left", sleep_label(self.sleep()), clock(left)),
-            None => String::new(),
-        }
-    }
-
     /// The five ways the reading can end itself.
     fn timer_menu(&mut self, ui: &mut Ui, p: &Palette, anchor: Rect, now: f64) {
         // A menu closes when the reader presses anywhere else, or presses Escape. The stopwatch
@@ -511,10 +525,11 @@ impl Listen {
 fn clock(seconds: f32) -> String {
     let total = seconds.max(0.0).round() as u32;
     let (hours, minutes, secs) = (total / 3600, (total % 3600) / 60, total % 60);
+    // Minutes are padded too: a countdown whose width changes makes the things beside it jump.
     if hours > 0 {
         format!("{hours}:{minutes:02}:{secs:02}")
     } else {
-        format!("{minutes}:{secs:02}")
+        format!("{minutes:02}:{secs:02}")
     }
 }
 
@@ -530,6 +545,16 @@ fn sleep_label(sleep: Sleep) -> String {
 mod tests {
     use super::*;
 
+
+    #[test]
+    fn the_clock_keeps_one_width_whatever_the_time() {
+        assert_eq!(clock(892.0), "14:52");
+        // A single-digit minute is padded, so the number never changes width as it runs down.
+        assert_eq!(clock(544.0), "09:04");
+        assert_eq!(clock(59.0), "00:59");
+        assert_eq!(clock(3725.0), "1:02:05");
+        assert_eq!(clock(-5.0), "00:00");
+    }
 
     #[test]
     fn the_sleep_choices_are_worded_for_the_bar() {
