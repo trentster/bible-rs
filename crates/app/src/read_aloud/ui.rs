@@ -175,6 +175,13 @@ impl Listen {
             Pos2::new(area.center().x, area.bottom() - INSET - BAR_HEIGHT / 2.0),
             Vec2::new(BAR_WIDTH, BAR_HEIGHT),
         );
+        // While the pointer is on the bar it stays up: letting it fall to the hairline under the
+        // cursor and spring back a frame later is the flicker the reader sees.
+        if self.timer_open
+            || ui.ctx().pointer_hover_pos().is_some_and(|pt| rect.expand(8.0).contains(pt))
+        {
+            self.bar_until = now + BAR_SECONDS;
+        }
         p.shadows.panel.paint(ui.painter(), rect, BAR_HEIGHT / 2.0);
         ui.painter().rect_filled(rect, BAR_HEIGHT / 2.0, p.paper);
         ui.painter().rect_stroke(
@@ -322,7 +329,7 @@ impl Listen {
         if moon.hovered() || self.timer_open {
             ui.painter().circle_filled(moon_rect.center(), 16.0, p.fill_strong);
         }
-        moon_icon(ui.painter(), moon_rect, if self.timer_open { p.accent_quiet } else { p.ink_2 }, p.paper);
+        timer_icon(ui.painter(), moon_rect, if self.timer_open { p.accent_quiet } else { p.ink_2 });
         if moon.clicked() {
             self.timer_open = !self.timer_open;
             self.touched(now);
@@ -461,16 +468,17 @@ fn clock(seconds: f32) -> String {
     }
 }
 
-/// A crescent, drawn as two circles so it needs no path work.
-fn moon_icon(painter: &egui::Painter, rect: Rect, color: Color32, background: Color32) {
-    let c = rect.center();
-    let r = 7.0;
-    painter.circle_stroke(c, r, Stroke::new(1.5, color));
-    painter.add(egui::Shape::circle_filled(
-        Pos2::new(c.x + 3.6, c.y - 1.6),
-        r - 1.4,
-        background,
-    ));
+/// An hourglass: the sleep timer's shape, which reads at 14 pt where a crescent did not.
+fn timer_icon(painter: &egui::Painter, rect: Rect, color: Color32) {
+    let r = Rect::from_center_size(rect.center(), Vec2::splat(11.0));
+    let stroke = Stroke::new(1.3, color);
+    painter.hline(r.x_range(), r.top(), stroke);
+    painter.hline(r.x_range(), r.bottom(), stroke);
+    let c = r.center();
+    painter.line_segment([r.left_top(), c], stroke);
+    painter.line_segment([r.right_top(), c], stroke);
+    painter.line_segment([r.left_bottom(), c], stroke);
+    painter.line_segment([r.right_bottom(), c], stroke);
 }
 
 fn close_icon(painter: &egui::Painter, rect: Rect, color: Color32) {
