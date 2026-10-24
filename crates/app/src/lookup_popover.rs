@@ -33,6 +33,14 @@ pub struct LookUp {
     pub reference: String,
 }
 
+/// What the popover shows: the lines to scroll, the dictionary line pinned at its foot, and — when
+/// neither dictionary has the word — the word to search the web for.
+struct Body {
+    lines: Vec<(String, bool)>,
+    pinned: Option<String>,
+    search_for: Option<String>,
+}
+
 impl LookUp {
     pub fn new(word: String, reference: String) -> Self {
         Self { word, reference }
@@ -50,33 +58,26 @@ impl LookUp {
         Some(Self::new(word, at.verse.to_string()))
     }
 
-    /// The popover's body: the paragraphs to scroll, and the dictionary line pinned at its foot.
+    /// The popover's body: WordNet's senses, or Easton's opening sentences for a Bible word, or a
+    /// plain "no definition" with a way to look further.
     ///
-    /// This is where the bundled dictionary is first parsed, so nothing is read until a word is
-    /// actually asked about — the startup path never touches it.
-    fn body(&self) -> (Vec<(String, bool)>, Option<String>) {
+    /// This is where the bundled dictionaries are first parsed, so nothing is read until a word is
+    /// actually asked about — the startup path never touches them.
+    fn body(&self) -> Body {
         let found = bible_core::lexicon::define(&self.word);
         if found.is_empty() {
-            return (
-                vec![(
-                    format!(
-                        "No entry for “{}” in {}.",
-                        self.word,
-                        bible_core::lexicon::Source::Easton.label()
-                    ),
-                    false,
-                )],
-                None,
-            );
+            return Body {
+                lines: vec![("No definition found".to_string(), false)],
+                pinned: None,
+                search_for: Some(self.word.clone()),
+            };
         }
         let mut lines = Vec::new();
-        // The KJV's spelling is not always Easton's headword, and the reader deserves to know why
-        // they are being shown a different word.
+        // The KJV's spelling is not always the dictionary's headword, and the reader deserves to
+        // know why they are being shown a different word.
         if let Some(headword) = &found.shown_as {
             lines.push((format!("“{}” — shown as {}", self.word, headword), true));
         }
-        // With one dictionary in the box its name is pinned at the foot; with several, each entry
-        // carries its own line, so it is never ambiguous which said what.
         let one_source = found.entries.iter().all(|e| e.source == found.entries[0].source);
         let mut pinned = None;
         for entry in &found.entries {
@@ -90,7 +91,7 @@ impl LookUp {
                 lines.push((entry.source.label().to_string(), true));
             }
         }
-        (lines, pinned)
+        Body { lines, pinned, search_for: None }
     }
 
     /// Draws the popover hanging from the looked-up words; returns `true` to close.
@@ -100,12 +101,15 @@ impl LookUp {
         }
         let screen = ctx.content_rect();
         let anchor = anchor(reader).unwrap_or_else(|| crate::note_popover::fallback_anchor(screen));
-        let (body, pinned) = self.body();
-        // A dictionary line pinned at the foot takes its own strip, whatever the entry's length.
-        let foot = if pinned.is_some() { 30.0 } else { 0.0 };
+        let body = self.body();
+        // A dictionary line at the foot takes a little padding, whatever the entry's length.
+        let foot = if body.pinned.is_some() { 24.0 } else { 0.0 };
+        // A search button, when there is nothing to show.
+        let search_height = if body.search_for.is_some() { 42.0 } else { 0.0 };
         // Wrapped text, so a long entry is measured rather than counted in fixed-height lines.
         let wrap = WIDTH - 32.0;
         let measured: Vec<(std::sync::Arc<egui::Galley>, bool)> = body
+            .lines
             .iter()
             .map(|(line, is_source)| {
                 let font = if *is_source { theme::ui_font(11.5) } else { theme::ui_font(13.0) };
@@ -126,7 +130,7 @@ impl LookUp {
         // A long entry scrolls rather than growing the popover off the screen.
         let cap = (screen.height() * 0.42).max(80.0);
         let body_height = text_height.min(cap);
-        let chrome = 64.5 + 14.0 + 14.0 + foot;
+        let chrome = 64.5 + 14.0 + 14.0 + foot + search_height;
         let height = chrome + body_height;
 
         let below = screen.bottom() - (anchor.bottom() + 3.0 + BEAK.y) - 16.0;
@@ -168,7 +172,7 @@ impl LookUp {
 
                 let body_rect = Rect::from_min_max(
                     pos2(rect.left() + 16.0, rect.top() + 64.5 + 12.0),
-                    pos2(rect.right() - 16.0, rect.bottom() - 14.0 - foot),
+                    pos2(rect.right() - 16.0, rect.bottom() - 14.0 - foot - search_height),
                 );
                 let mut child = ui.new_child(egui::UiBuilder::new().max_rect(body_rect));
                 child.set_clip_rect(body_rect.intersect(ctx.content_rect()));
@@ -186,17 +190,53 @@ impl LookUp {
                         }
                     }
                 });
+                // Neither dictionary has the word: offer to search the web. The app itself makes no
+                // network request — it hands the word to the reader's own browser.
+                if let Some(word) = &body.search_for {
+                    let button = Rect::from_min_size(
+                        pos2(rect.left() + 16.0, rect.bottom() - 14.0 - foot - 34.0),
+                        vec2(widgets::secondary_button_width(ui, "Search the web"), 28.0),
+                    );
+                    if widgets::secondary_button(ui, p, button, "Search the web", ui.id().with("lookup-web"))
+                        .clicked()
+                    {
+                        crate::app::open_url(&wiktionary_url(word));
+                    }
+                }
                 // The dictionary's name sits at the foot, so a long entry scrolling past does not
-                // take the provenance with it.
-                if let Some(label) = &pinned {
-                    let line_y = rect.bottom() - 24.0;
-                    painter.hline(rect.x_range(), line_y, Stroke::new(1.0, p.separator));
-                    text(&painter, x, line_y + 8.0, 11.5, label, theme::ui_font(11.5), p.ink_2, false);
+                // take the provenance with it. Deliberately no rule above it: a full-width line at
+                // the bottom edge reads as a bar with more content behind it to scroll to, which is
+                // a lie when the entry is short. Quiet text in the padding reads as a footnote.
+                if let Some(label) = &body.pinned {
+                    text(
+                        &painter,
+                        x,
+                        rect.bottom() - 15.0,
+                        11.0,
+                        &format!("Source: {label}"),
+                        egui::FontId::new(11.5, theme::family(theme::SERIF_ITALIC)),
+                        p.ink_2,
+                        false,
+                    );
                 }
             });
         // A click anywhere outside closes it, as the note popover already behaves.
         close || area.response.clicked_elsewhere()
     }
+}
+
+/// A Wiktionary search for a word — the one case where neither dictionary has it. The URL is handed
+/// to the reader's browser; the app never makes a network request of its own.
+fn wiktionary_url(word: &str) -> String {
+    let mut url = String::from("https://en.wiktionary.org/wiki/");
+    for byte in word.trim().bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => url.push(byte as char),
+            b' ' => url.push('_'),
+            _ => url.push_str(&format!("%{byte:02X}")),
+        }
+    }
+    url
 }
 
 /// What a lookup at `pt` would ask about, or `None` — and then the menu leaves the item out.

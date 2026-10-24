@@ -4,8 +4,11 @@
 # Each line: the spelling as the KJV prints it, the headword Easton's files it under, and one verse
 # where the KJV uses that spelling (a test checks every line against the bundled KJV).
 #
-# This table is our own editorial data, assembled by hand from the KJV text and Easton's headwords.
-# It is not Easton's (which is public domain in any case) and carries no third-party claim.
+# This table is our own editorial data, assembled by hand from the KJV text and the dictionaries'
+# headwords. It is not part of any dictionary and carries no third-party claim.
+#
+# Two kinds of line: a spelling the KJV prints in a Greek form, and an archaic verb form WordNet
+# does not list among its irregular forms ("spake" is not in its table, so the table carries it).
 #
 # Deliberately absent: Corinthians and Philippians. Those are not spelling variants of Corinth and
 # Philippi — the reader asking about the epistle is not asking about the city, and mapping one to
@@ -19,3 +22,4 @@ beth-el	Bethel	gen 12:8
 jephthae	Jephthah	heb 11:32
 sara	Sarah	1 pet 3:6
 chanaan	Canaan	acts 7:11
+spake	speak	matt 13:3

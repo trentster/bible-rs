@@ -15,6 +15,8 @@ use anyhow::{Context, Result};
 /// Which dictionary an entry came from.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Source {
+    /// Open English WordNet (2025): plain meanings of ordinary English words.
+    Wordnet,
     /// Easton's Bible Dictionary (1897): Bible words, names and places.
     Easton,
     /// Webster's Revised Unabridged (1913): ordinary and archaic English.
@@ -25,6 +27,7 @@ impl Source {
     /// The line the popover shows under an entry.
     pub fn label(self) -> &'static str {
         match self {
+            Source::Wordnet => "WordNet",
             Source::Easton => "Easton's Bible Dictionary (1897)",
             Source::Webster1913 => "Webster's Revised Unabridged (1913)",
         }
@@ -32,6 +35,7 @@ impl Source {
 
     fn parse(s: &str) -> Option<Self> {
         match s.trim().to_ascii_lowercase().as_str() {
+            "wordnet" => Some(Source::Wordnet),
             "easton" => Some(Source::Easton),
             "webster1913" | "webster" => Some(Source::Webster1913),
             _ => None,
@@ -127,6 +131,23 @@ fn normalize(word: &str) -> String {
         .replace('\u{2019}', "'")
 }
 
+/// The first `count` sentences of a text, so a long encyclopaedia entry becomes a definition.
+fn first_sentences(text: &str, count: usize) -> String {
+    let mut out = String::new();
+    let mut seen = 0;
+    let mut chars = text.chars().peekable();
+    while let Some(c) = chars.next() {
+        out.push(c);
+        if c == '.' && chars.peek().map_or(true, |next| next.is_whitespace()) {
+            seen += 1;
+            if seen == count {
+                break;
+            }
+        }
+    }
+    out.trim().to_string()
+}
+
 /// The keys to try for `word`, most specific first: the word itself, then its likelier base forms.
 fn forms(word: &str) -> Vec<String> {
     let word = normalize(word);
@@ -187,7 +208,9 @@ mod bundled {
     }
 
     static EASTON: &str = tsv!("easton");
+    static WORDNET: &str = tsv!("wordnet");
     static ALIASES: &str = tsv!("aliases");
+    static FORMS: &str = tsv!("wordnet-forms");
 
     /// One spelling the text uses, and the headword the dictionary files it under.
     #[derive(Clone, Debug)]
@@ -238,40 +261,107 @@ mod bundled {
         })
     }
 
-    fn dictionary() -> &'static Lexicon {
-        static PARSED: OnceLock<Lexicon> = OnceLock::new();
-        PARSED.get_or_init(|| match Lexicon::parse(EASTON) {
+    fn parsed(once: &'static OnceLock<Lexicon>, text: &str) -> &'static Lexicon {
+        once.get_or_init(|| match Lexicon::parse(text) {
             Ok(lexicon) => lexicon,
             Err(e) => {
                 // Loud once, then empty: a broken build-time file must not panic in front of a reader.
-                eprintln!("lexicon: the bundled dictionary would not parse: {e}");
+                eprintln!("lexicon: a bundled dictionary would not parse: {e}");
                 Lexicon::none()
             }
         })
     }
 
-    /// What the bundled dictionaries say about a word or short phrase, in source order.
+    fn easton() -> &'static Lexicon {
+        static ONCE: OnceLock<Lexicon> = OnceLock::new();
+        parsed(&ONCE, EASTON)
+    }
+
+    fn wordnet() -> &'static Lexicon {
+        static ONCE: OnceLock<Lexicon> = OnceLock::new();
+        parsed(&ONCE, WORDNET)
+    }
+
+    /// WordNet's irregular forms, as `form → lemma` ("went" → "go").
+    fn forms() -> &'static HashMap<String, String> {
+        static ONCE: OnceLock<HashMap<String, String>> = OnceLock::new();
+        ONCE.get_or_init(|| {
+            let mut map = HashMap::new();
+            for line in FORMS.lines() {
+                let line = line.trim_end();
+                if line.is_empty() || line.starts_with('#') {
+                    continue;
+                }
+                if let Some((form, lemma)) = line.split_once('\t') {
+                    map.insert(super::normalize(form), lemma.to_string());
+                }
+            }
+            map
+        })
+    }
+
+    /// What the bundled dictionaries say about a word or short phrase.
     ///
-    /// A word with no entry of its own is tried once against the curated spelling table — the KJV's
-    /// *Melchisedec* against Easton's *Melchizedek* — and never guessed at beyond that.
+    /// WordNet answers ordinary words with plain meanings. Easton's answers what WordNet has never
+    /// heard of — Bible names and places — and only its opening sentences are shown, because a
+    /// reader asked what a word means, not for an essay. Irregular forms come from WordNet's own
+    /// table ("went" → "go"), and the curated spelling table covers the rest ("spake" → "speak").
     pub fn define(word: &str) -> Definition {
-        let lexicon = dictionary();
-        let entries = lexicon.lookup(word);
-        if !entries.is_empty() {
+        let alias = aliases().get(&super::normalize(word)).cloned();
+
+        // WordNet first: ordinary words get a plain meaning.
+        if let Some(entries) = wordnet_entries(word) {
             return Definition { entries, shown_as: None };
         }
-        if let Some(alias) = aliases().get(&super::normalize(word)) {
-            let entries = lexicon.lookup(&alias.headword);
+        // A spelling the table points elsewhere may still be an ordinary word ("spake" → "speak").
+        if let Some(target) = &alias {
+            if let Some(entries) = wordnet_entries(&target.headword) {
+                return Definition { entries, shown_as: Some(target.headword.clone()) };
+            }
+        }
+        // Then Easton's, for Bible names and places WordNet has never heard of.
+        let entries = easton().lookup(word);
+        if !entries.is_empty() {
+            return Definition { entries: opening(entries), shown_as: None };
+        }
+        if let Some(target) = &alias {
+            let entries = easton().lookup(&target.headword);
             if !entries.is_empty() {
-                return Definition { entries, shown_as: Some(alias.headword.clone()) };
+                return Definition { entries: opening(entries), shown_as: Some(target.headword.clone()) };
             }
         }
         Definition { entries: Vec::new(), shown_as: None }
     }
 
-    /// How many headwords the bundled dictionary holds; for tests and diagnostics.
+    /// WordNet's answer for a word, following its irregular forms first.
+    fn wordnet_entries(word: &str) -> Option<Vec<Entry>> {
+        let direct = wordnet().lookup(word);
+        if !direct.is_empty() {
+            return Some(direct);
+        }
+        let lemma = forms().get(&super::normalize(word))?;
+        let found = wordnet().lookup(lemma);
+        if found.is_empty() {
+            None
+        } else {
+            Some(found)
+        }
+    }
+
+    /// Each entry cut to its first two sentences.
+    fn opening(entries: Vec<Entry>) -> Vec<Entry> {
+        entries
+            .into_iter()
+            .map(|mut entry| {
+                entry.body = super::first_sentences(&entry.body, 2);
+                entry
+            })
+            .collect()
+    }
+
+    /// How many headwords the bundled dictionaries hold together; for tests and diagnostics.
     pub fn headwords() -> usize {
-        dictionary().len()
+        wordnet().len() + easton().len()
     }
 }
 
@@ -294,8 +384,23 @@ fn the_bundled_dictionary_answers_the_words_a_reader_will_ask_about() {
     // A phrase with its own entry is found as a phrase.
     assert!(!define("burnt offering").is_empty());
     // A word with no entry says nothing rather than guessing.
-    assert!(define("computer").is_empty());
-    assert!(define("computer").shown_as.is_none());
+    assert!(define("zorblat").is_empty());
+    assert!(define("zorblat").shown_as.is_none());
+    // An ordinary word comes from WordNet, with its part of speech.
+    let feast = define("feast");
+    assert_eq!(feast.entries[0].source, Source::Wordnet);
+    assert!(feast.entries[0].body.starts_with("n. "), "{}", feast.entries[0].body);
+    // An irregular form reaches its lemma through WordNet's own table.
+    assert!(!define("went").is_empty());
+    assert!(!define("feet").is_empty());
+    // The KJV's archaic past tense is not in WordNet, so the curated table carries it.
+    assert!(!define("spake").is_empty());
+    // A Bible name WordNet has never heard of comes from Easton's, cut to its opening sentences.
+    let melchisedec = define("Melchisedec");
+    assert_eq!(melchisedec.entries[0].source, Source::Easton);
+    let body = &melchisedec.entries[0].body;
+    assert!(body.contains("king of Salem"), "{body}");
+    assert!(!body.contains("typical significance"), "the essay was not trimmed: {body}");
 }
 
 #[cfg(all(test, feature = "bundled"))]

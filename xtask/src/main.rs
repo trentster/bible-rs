@@ -14,6 +14,7 @@ use bible_core::model::{Origin, TranslationBuilder, TranslationMeta};
 use bible_core::usfm;
 use sha2::{Digest, Sha256};
 
+mod wordnet;
 mod zld;
 
 struct Source {
@@ -211,6 +212,7 @@ fn main() -> Result<()> {
             Ok(())
         }
         Some("build-lexicon") => build_lexicon(&root, &args[1..]),
+        Some("build-wordnet") => build_wordnet(&root),
         Some("fetch") => {
             for s in selected(&args[1..]) {
                 fetch(&root, s)?;
@@ -218,7 +220,9 @@ fn main() -> Result<()> {
             Ok(())
         }
         _ => {
-            eprintln!("usage: cargo run -p xtask -- build-data [ids…] | build-lexicon [ids…] | fetch [ids…]");
+            eprintln!(
+                "usage: cargo run -p xtask -- build-data [ids…] | build-lexicon [ids…] | build-wordnet | fetch [ids…]"
+            );
             std::process::exit(2)
         }
     }
@@ -407,6 +411,47 @@ fn fetch_dictionary(root: &Path, d: &Dictionary) -> Result<PathBuf> {
         }
     }
     Ok(file)
+}
+
+/// Open English WordNet: the primary dictionary, where ordinary words come from.
+const WORDNET: (&str, &str) = (
+    "https://github.com/globalwordnet/english-wordnet/releases/download/2025-edition/english-wordnet-2025-json.zip",
+    "7d749f6e2c39e6970e4997839dcf6e42fd281f3c2fae0171d2192bae8cfa4b51",
+);
+
+fn build_wordnet(root: &Path) -> Result<()> {
+    let (url, sha) = WORDNET;
+    let sources = root.join(".sources");
+    std::fs::create_dir_all(&sources)?;
+    let archive = sources.join("oewn-2025-json.zip");
+    if !archive.exists() {
+        eprintln!("downloading {url}");
+        let status = Command::new("curl").args(["-fsSL", "-o"]).arg(&archive).arg(url).status()?;
+        if !status.success() {
+            bail!("download failed: {url}");
+        }
+    }
+    let digest = hex(&Sha256::digest(std::fs::read(&archive)?));
+    if digest != sha {
+        bail!(
+            "{} sha256 mismatch: expected {sha}, got {digest}. The release changed; review it, then \
+             update the pin.",
+            archive.display()
+        );
+    }
+    let (lexicon, forms) = wordnet::convert(&archive)?;
+    let out = root.join("data/lexicon");
+    std::fs::create_dir_all(&out)?;
+    std::fs::write(out.join("wordnet.tsv"), &lexicon)?;
+    std::fs::write(out.join("wordnet-forms.tsv"), &forms)?;
+    println!(
+        "Open English WordNet  {:>6} words {:>6} forms  {:>5.2} MB → {}",
+        lexicon.lines().count().saturating_sub(3),
+        forms.lines().count().saturating_sub(1),
+        lexicon.len() as f64 / 1e6,
+        out.join("wordnet.tsv").display()
+    );
+    Ok(())
 }
 
 fn hex(bytes: &[u8]) -> String {

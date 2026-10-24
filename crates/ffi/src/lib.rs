@@ -599,10 +599,14 @@ mod definition_tests {
     #[test]
     fn a_word_reaches_the_phone_with_its_dictionary_and_source() {
         let found = define("propitiation".into());
-        assert_eq!(found.entries.len(), 1, "{found:?}");
-        assert!(found.entries[0].body.contains("propitious"), "{}", found.entries[0].body);
-        assert_eq!(found.entries[0].source, "Easton's Bible Dictionary (1897)");
+        assert!(!found.entries.is_empty(), "{found:?}");
+        assert_eq!(found.entries[0].source, "WordNet");
+        assert!(!found.entries[0].body.is_empty());
         assert!(found.shown_as.is_none());
+        // A Bible name comes from Easton's instead.
+        let name = define("Melchisedec".into());
+        assert_eq!(name.entries[0].source, "Easton's Bible Dictionary (1897)");
+        assert_eq!(name.shown_as.as_deref(), Some("Melchizedek"));
     }
 
     #[test]
@@ -614,7 +618,7 @@ mod definition_tests {
 
     #[test]
     fn an_unknown_word_comes_back_empty_rather_than_invented() {
-        let found = define("computer".into());
+        let found = define("zorblat".into());
         assert!(found.entries.is_empty());
         assert!(found.shown_as.is_none());
     }

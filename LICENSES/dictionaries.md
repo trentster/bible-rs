@@ -1,11 +1,58 @@
 # Dictionaries: provenance and terms
 
-Each dictionary is converted once, at build time, from the module the CrossWire Bible Society
-publishes: `cargo run -p xtask -- build-lexicon`. The archive is pinned by SHA-256 in
-`xtask/src/main.rs`; a changed file fails the build rather than sliding in unnoticed. The app never
-contains a reader for the module format — only the plain text the conversion writes.
+Each dictionary is converted once, at build time, from the archive the publisher releases:
+`cargo run -p xtask -- build-lexicon` for CrossWire modules and `cargo run -p xtask -- build-wordnet`
+for WordNet. Every archive is pinned by SHA-256 in `xtask/src/main.rs`; a changed file fails the
+build rather than sliding in unnoticed. The app never contains a reader for a module or release
+format — only the plain text the conversion writes.
+
+## Open English WordNet (2025 edition) — `wordnet`
+
+The dictionary a reader gets for ordinary English words. It answers first; Easton's answers only
+what WordNet has never heard of.
+
+| | |
+|---|---|
+| Archive | `https://github.com/globalwordnet/english-wordnet/releases/download/2025-edition/english-wordnet-2025-json.zip` |
+| SHA-256 | `7d749f6e2c39e6970e4997839dcf6e42fd281f3c2fae0171d2192bae8cfa4b51` (9,986,555 bytes) |
+| Downloaded | 2026-10-24 |
+| Licence | Creative Commons Attribution 4.0 International **and** the Princeton WordNet License |
+| Attribution required | **Princeton WordNet** and the **Open English WordNet team** |
+
+Verbatim, from the project's own `LICENSE.md`:
+
+> This resource is derived from Princeton WordNet under the WordNet License
+> and further developed under the Creative Commons Attribution 4.0 International License.
+> You may share and adapt this resource providing attribution is given to both
+> Princeton WordNet and the Open English Wordnet team.
+
+Why it may be redistributed: CC BY 4.0 permits redistribution in any medium provided the attribution
+above is given, and the Princeton WordNet License permits use, copying, modification and
+distribution for any purpose, without fee or royalty. Both conditions are satisfiable by a bundled,
+offline app, and neither is copyleft — the surrounding app stays MIT. The attribution line is
+discharged on screen by the popover's `Source: WordNet` footnote. **Still to do:** a fuller credit
+(project name, edition, link, "modified") belongs in an About/credits surface once the app has one;
+that obligation is not yet fully met, and is recorded here rather than quietly dropped.
+
+What the conversion changes — it is a *modified* form of the resource, as CC BY 4.0 requires us to
+state:
+
+- lexical entries and synsets are flattened to word + meanings; synset relations, examples, sense
+  numbers and parts of the vocabulary outside noun/verb/adjective/adverb are dropped;
+- the first **three** senses per word are kept, ordered so the part of speech the word is mostly
+  used as comes first;
+- one definition line per sense, prefixed `n.`, `v.`, `adj.` or `adv.`, and truncated at 160
+  characters on a word boundary (marked with `…`) to stay one short line in the popover;
+- irregular inflections are extracted into their own table (`wordnet-forms.tsv`, 4,389 forms,
+  form → lemma) so *went*, *feet* and *best* reach *go*, *foot* and *good*;
+- the result is plain TSV: `data/lexicon/wordnet.tsv`, 127,981 words, 13,242,890 bytes.
+
+No definitions are added, removed or rewritten.
 
 ## Easton's Bible Dictionary (1897) — `easton`
+
+The fallback, for Bible names and places WordNet has never heard of. Only its opening sentence or
+two is shown, trimmed at display time.
 
 | | |
 |---|---|

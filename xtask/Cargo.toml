@@ -13,3 +13,4 @@ anyhow.workspace = true
 sha2 = "0.10"
 zip = { version = "9", default-features = false, features = ["deflate"] }
 flate2 = "1"
+serde_json.workspace = true
