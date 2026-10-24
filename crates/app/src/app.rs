@@ -1141,8 +1141,19 @@ impl BibleApp {
                 let left: f32 = left.trim().parse().unwrap_or(892.0);
                 let now = ctx.input(|i| i.time);
                 let (c, _) = self.reader.location;
-                let label = format!("{} {}", c.book().name(), c.chapter());
-                self.listen.show_preview(verse, left, label, now);
+                self.listen.show_preview(verse, left, c, now);
+            }
+            // `wait`: hold a frame, so a later step sees the page settled.
+            "wait" => {}
+            // `follow:<verse>`: the page following the voice, as it does while a chapter is read.
+            // The time is pushed forward past the yield, because a demo has no frames to wait.
+            #[cfg(feature = "speak")]
+            "follow" => {
+                let verse: u8 = arg.parse().unwrap_or(1);
+                let now = ctx.input(|i| i.time);
+                let (c, _) = self.reader.location;
+                let at = bible_core::books::VerseRef::new(c.book(), c.chapter(), verse);
+                self.reader.follow(at, now + 60.0);
             }
             // `menu:<reference>@x,y`: select the verse and open its menu there.
             "menu" => {
@@ -1445,7 +1456,7 @@ impl BibleApp {
             &verses,
             bible_core::speak::Sleep::default(),
         );
-        self.listen.begin(session, self.settings.voice(), format!("{book} {number}"), now);
+        self.listen.begin(session, self.settings.voice(), chapter, now);
     }
 
     /// The toolbar over the reading area (`ds-06` in the design): back/forward (after the
@@ -2732,6 +2743,10 @@ impl eframe::App for BibleApp {
                         reader_rect.max,
                     );
                     self.listen.show(&mut reader_ui, p, area, now);
+                    // The page follows the voice while there is one, and only then.
+                    if let Some(at) = self.listen.following() {
+                        self.reader.follow(at, now);
+                    }
                 }
             }
             if first {

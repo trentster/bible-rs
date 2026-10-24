@@ -99,6 +99,13 @@ struct Cached {
     provisional: Option<u64>,
 }
 
+/// How far below the top of the viewport a followed verse lands, as a fraction of its height.
+const FOLLOW_LANDING: f32 = 0.33;
+/// How far down the viewport a followed verse may drift before the page moves again.
+const FOLLOW_TRIGGER: f32 = 0.66;
+/// Seconds after the reader scrolls by hand that the voice leaves the page alone.
+pub const FOLLOW_YIELD: f64 = 8.0;
+
 pub struct Reader {
     pub anchor: Anchor,
     cache: HashMap<ChapterIdx, Cached>,
@@ -135,6 +142,11 @@ pub struct Reader {
     pub under_toolbar: bool,
     /// When the view last scrolled: the scroller shows while scrolling, like macOS overlay scrollers.
     scrolled_at: f64,
+    /// When the *reader* last scrolled, by wheel, key, scrollbar or jump. The voice stops pulling the
+    /// page for a few seconds after that, so following never fights the person reading.
+    user_scrolled_at: f64,
+    /// A scroll asked for by the reader but not yet seen by a frame.
+    user_scrolled: bool,
     /// Chapter/verse currently at the reading line (for the toolbar and saved position).
     pub location: (ChapterIdx, u8),
     /// The furthest verse of the location's chapter that is in view (reading progress).
@@ -176,6 +188,8 @@ impl Reader {
             toolbar: 52.0,
             under_toolbar: false,
             scrolled_at: f64::NEG_INFINITY,
+            user_scrolled_at: f64::NEG_INFINITY,
+            user_scrolled: false,
             location: (chapter, verse.max(1)),
             furthest_in_view: verse.max(1),
             columns_x: Vec::new(),
@@ -192,12 +206,14 @@ impl Reader {
     }
 
     pub fn jump(&mut self, chapter: ChapterIdx, verse: Option<u8>, flash: bool) {
+        self.user_scrolled = true;
         self.scroll_remaining = 0.0;
         self.pending_jump = Some((chapter, verse.unwrap_or(1), flash && verse.is_some()));
         self.location = (chapter, verse.unwrap_or(1));
     }
 
     pub fn scroll_by(&mut self, dy: f32) {
+        self.user_scrolled = true;
         self.scroll_remaining += dy;
     }
 
@@ -283,6 +299,45 @@ impl Reader {
         if let Some(r) = target {
             self.set_selection(Some(r));
             self.ensure_visible(r);
+        }
+    }
+
+    /// Keeps the verse being read on screen while the voice moves through it.
+    ///
+    /// The page is left alone until the verse reaches the lower part of the screen, then moved once
+    /// so it sits a third from the top. A nudge at every verse would be unreadable, and a page that
+    /// scrolls continuously is worse than one that does not move at all.
+    pub fn follow(&mut self, r: VerseRef, now: f64) {
+        // The page belongs to whoever last touched it: pulling it back while they are reading
+        // elsewhere would be the app arguing with the person using it.
+        if now - self.user_scrolled_at < FOLLOW_YIELD {
+            return;
+        }
+        let c = r.chapter_idx();
+        let Some(cached) = self.cache.get(&c) else {
+            self.pending_jump = Some((c, r.verse, false));
+            return;
+        };
+        let Some(a) = cached.layout.anchor(0, r.verse) else { return };
+        // Where the top of the verse sits on screen now. The page is painted from `top_pad` below
+        // the reader's top edge, so that is part of the position, not an afterthought.
+        let mut top = a.top - self.anchor.offset + self.top_pad;
+        if c != self.anchor.chapter {
+            if c < self.anchor.chapter {
+                // The voice only moves forward; a verse behind us needs no page turn.
+                return;
+            }
+            match self.cache.get(&self.anchor.chapter) {
+                // The next chapter is the one below this one on the page.
+                Some(cur) if c.0 == self.anchor.chapter.0 + 1 => top += cur.layout.height,
+                _ => {
+                    self.pending_jump = Some((c, r.verse, false));
+                    return;
+                }
+            }
+        }
+        if let Some(mv) = follow_move(top, a.bottom - a.top, self.toolbar, self.viewport_h) {
+            self.scroll_remaining = mv;
         }
     }
 
@@ -524,6 +579,7 @@ impl Reader {
         if resp.hovered() || resp.contains_pointer() {
             dy -= ui.input(|i| i.smooth_scroll_delta.y);
         }
+        let wheel = dy;
         if self.scroll_remaining.abs() > 0.5 {
             let step = self.scroll_remaining * 0.28;
             let step = if step.abs() < 0.5 { self.scroll_remaining } else { step };
@@ -548,12 +604,16 @@ impl Reader {
             self.anchor = Anchor { chapter: c, offset: f.fract() * l.height };
             self.scroll_remaining = 0.0;
             self.deferred_jump = None;
+            self.user_scrolled = true;
             dy = 0.0;
         }
         self.anchor.offset += dy;
         if dy != 0.0 {
             self.deferred_jump = None;
             self.scrolled_at = ui.input(|i| i.time);
+        }
+        if wheel != 0.0 || std::mem::take(&mut self.user_scrolled) {
+            self.user_scrolled_at = ui.input(|i| i.time);
         }
         self.normalize(ui, env, &geom);
 
@@ -1132,5 +1192,49 @@ impl Geometry {
         let total_w = col_w * n + gutter * (n - 1.0);
         let x0 = px(rect.center().x - total_w / 2.0);
         Self { x0, col_w, gutter, total_w }
+    }
+}
+
+/// The move that brings a followed verse back into the comfortable part of the screen, or `None`
+/// when it is already there. Positive moves the text up, as scrolling down does.
+fn follow_move(top: f32, verse_height: f32, toolbar: f32, viewport_h: f32) -> Option<f32> {
+    let height = (viewport_h - toolbar).max(1.0);
+    let in_band = top >= toolbar && top + verse_height <= toolbar + height * FOLLOW_TRIGGER;
+    if in_band {
+        return None;
+    }
+    Some(top - (toolbar + height * FOLLOW_LANDING))
+}
+
+#[cfg(test)]
+mod follow_tests {
+    use super::{FOLLOW_LANDING, FOLLOW_TRIGGER, follow_move};
+
+    const TOOLBAR: f32 = 52.0;
+    const VIEWPORT: f32 = 852.0;
+
+    fn landing() -> f32 {
+        TOOLBAR + (VIEWPORT - TOOLBAR) * FOLLOW_LANDING
+    }
+
+    #[test]
+    fn a_verse_in_the_comfortable_part_of_the_screen_is_left_alone() {
+        assert_eq!(follow_move(300.0, 90.0, TOOLBAR, VIEWPORT), None);
+        assert_eq!(follow_move(TOOLBAR, 90.0, TOOLBAR, VIEWPORT), None, "just under the toolbar is fine");
+    }
+
+    #[test]
+    fn a_verse_near_the_foot_of_the_page_is_brought_up_to_the_landing_line() {
+        let top = TOOLBAR + (VIEWPORT - TOOLBAR) * FOLLOW_TRIGGER - 10.0;
+        let mv = follow_move(top, 90.0, TOOLBAR, VIEWPORT).expect("it should move");
+        assert!(mv > 0.0, "the text moves up");
+        assert!((top - mv - landing()).abs() < 0.01, "and lands a third from the top");
+    }
+
+    #[test]
+    fn a_verse_above_the_top_of_the_page_comes_back_down() {
+        let mv = follow_move(TOOLBAR - 200.0, 90.0, TOOLBAR, VIEWPORT).expect("it should move");
+        assert!(mv < 0.0, "the text comes back down");
+        assert!((TOOLBAR - 200.0 - mv - landing()).abs() < 0.01);
     }
 }

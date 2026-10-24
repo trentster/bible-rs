@@ -8,6 +8,7 @@
 
 use eframe::egui::{self, Align2, FontId, Pos2, Rect, Sense, Stroke, Ui, Vec2};
 
+use bible_core::books::{ChapterIdx, VerseRef};
 use bible_core::speak::{Session, Sleep, Voice};
 
 use super::reading::{Reading, ReadingState};
@@ -26,6 +27,9 @@ const BAR_WIDTH: f32 = 340.0;
 pub struct Listen {
     reading: Option<Reading>,
     /// "Psalms 23" — what the bar calls the chapter.
+    /// The chapter being read: where the bar's label and the verse the page follows come from.
+    at: ChapterIdx,
+    /// "Matthew 8" — the chapter being read, for the bar.
     label: String,
     /// When the floating bar gives way to the status line, on the app's clock.
     bar_until: f64,
@@ -44,6 +48,7 @@ impl Listen {
     pub fn new() -> Listen {
         Listen {
             reading: None,
+            at: ChapterIdx::FIRST,
             label: String::new(),
             bar_until: 0.0,
             timer_open: false,
@@ -73,18 +78,20 @@ impl Listen {
     }
 
     /// Opens the controls for a chapter without speaking: the reader presses play when ready.
-    pub fn begin(&mut self, session: Session, voice: Voice, label: impl Into<String>, now: f64) {
+    pub fn begin(&mut self, session: Session, voice: Voice, at: ChapterIdx, now: f64) {
         self.stop();
         self.preview = None;
-        self.label = label.into();
+        self.at = at;
+        self.label = format!("{} {}", at.book().name(), at.chapter());
         self.reading = Some(Reading::open(session, voice));
         self.preview_left = None;
         self.touched(now);
     }
 
     /// Paints the bar without speaking, for the screenshot harness.
-    pub fn show_preview(&mut self, verse: u8, left: f32, label: impl Into<String>, now: f64) {
-        self.label = label.into();
+    pub fn show_preview(&mut self, verse: u8, left: f32, at: ChapterIdx, now: f64) {
+        self.at = at;
+        self.label = format!("{} {}", at.book().name(), at.chapter());
         self.preview = Some(ReadingState { verse: Some(verse), speaking: true, ..Default::default() });
         self.preview_left = Some(left);
         self.touched(now);
@@ -131,6 +138,17 @@ impl Listen {
     fn left(&self) -> Option<f32> {
         self.preview_left
             .or_else(|| self.reading.as_ref().and_then(|reading| reading.left()))
+    }
+
+    /// The verse being spoken right now, for the page to follow. `None` whenever there is no sound:
+    /// a bar that is ready or paused has no claim on where the reader is looking.
+    pub fn following(&self) -> Option<VerseRef> {
+        let state = self.state();
+        if !state.speaking {
+            return None;
+        }
+        let verse = state.verse?;
+        Some(VerseRef::new(self.at.book(), self.at.chapter(), verse))
     }
 
     pub fn sleep(&self) -> Sleep {
