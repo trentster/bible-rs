@@ -17,11 +17,20 @@ const OLD_PAUSE_MS: u32 = 380;
 
 fn main() {
     let translation = bible_core::bundled::load("kjv").expect("kjv");
-    let chapter =
-        bible_core::books::ChapterIdx::new(bible_core::books::BookId::from_code("MAT").expect("matthew"), 4)
-            .expect("matthew 4");
-    let verses: Vec<(u32, String)> =
-        translation.verses_in(chapter).map(|v| (v.number as u32, v.text.to_string())).collect();
+    // `BIBLE_RS_GAP="MAT 15"` and `BIBLE_RS_GAP_LAST=4` pick what to render.
+    let spec = std::env::var("BIBLE_RS_GAP").unwrap_or_else(|_| "MAT 4".to_string());
+    let (code, number) = spec.split_once(' ').unwrap_or(("MAT", "4"));
+    let chapter = bible_core::books::ChapterIdx::new(
+        bible_core::books::BookId::from_code(code).expect("book"),
+        number.trim().parse().expect("chapter"),
+    )
+    .expect("chapter");
+    let last: u32 = std::env::var("BIBLE_RS_GAP_LAST").ok().and_then(|v| v.parse().ok()).unwrap_or(8);
+    let verses: Vec<(u32, String)> = translation
+        .verses_in(chapter)
+        .filter(|v| v.number as u32 <= last)
+        .map(|v| (v.number as u32, v.text.to_string()))
+        .collect();
     let said = bible_core::speak::chapter("Matthew", 4, &verses);
 
     let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../data/speech");
@@ -61,7 +70,7 @@ fn main() {
 
         let trimmed = bible_core::speak::trim_silence(pcm, rate);
         let stretched = bible_core::speak::stretch(&trimmed, rate, voice.tempo());
-        after.extend_from_slice(&stretched);
+        after.extend_from_slice(&bible_core::speak::cap_gaps(&stretched, rate));
         after.extend(std::iter::repeat_n(0.0, (u.pause_ms as usize * rate as usize) / 1000));
     }
 

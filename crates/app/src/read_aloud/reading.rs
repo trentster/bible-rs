@@ -225,8 +225,8 @@ fn left_on(deadline: &Deadline) -> Option<f32> {
     Some(at.saturating_duration_since(Instant::now()).as_secs_f32())
 }
 
-/// The reading thread: take the next utterance, make it hearable, play it, until the chapter ends or
-/// the clock says so.
+/// The reading thread: make the chapter hearable slightly ahead of time and play it, until the chapter
+/// ends or the clock says so.
 fn speak(
     session: Arc<Mutex<Session>>,
     controls: Arc<Controls>,
@@ -244,6 +244,21 @@ fn speak(
     }
 }
 
+/// How many pieces are made ahead of the one being heard. One is enough in theory — while a piece
+/// plays, the next is being made — but a long passage can take longer to make than the piece before it
+/// takes to hear (measured: 2.4 s to make 12.9 s of speech), so three are kept ready. Without any, the
+/// reading stopped dead between pieces for as long as the voice took to make the next one: measured
+/// from a recording, 2.8 seconds of silence in the middle of Matthew 15. Traced after the change, the
+/// player waits only for the very first piece, 745 ms.
+const AHEAD: usize = 3;
+
+/// A piece of the chapter on its way to being heard.
+struct Heard {
+    pcm: Arc<Vec<f32>>,
+    verse: Option<u8>,
+    breath: usize,
+}
+
 fn run(
     session: &Arc<Mutex<Session>>,
     controls: &Arc<Controls>,
@@ -251,12 +266,67 @@ fn run(
     deadline: &Deadline,
     voice: Voice,
 ) -> Result<(), String> {
+    let (made, heard) = std::sync::mpsc::sync_channel::<Result<Heard, String>>(AHEAD);
+    std::thread::scope(|scope| {
+        let maker = scope.spawn(move || make(session, controls, voice, made));
+        let played = play(controls, state, deadline, &heard);
+        controls.stop();
+        // Dropping the listening end is what unblocks a maker waiting to hand a piece over.
+        drop(heard);
+        let _ = maker.join();
+        played
+    })
+}
+
+/// Makes the pieces ahead of the reader's ears, so that playback never waits for the voice.
+fn make(
+    session: &Arc<Mutex<Session>>,
+    controls: &Arc<Controls>,
+    voice: Voice,
+    out: std::sync::mpsc::SyncSender<Result<Heard, String>>,
+) {
+    loop {
+        if controls.stopped() {
+            return;
+        }
+        let next = {
+            let Ok(mut guard) = session.lock() else { return };
+            guard.next()
+        };
+        let Some(utterance) = next else { return };
+        let spoken = match engine() {
+            Ok(engine) => match engine.lock() {
+                Ok(mut engine) => engine.speak(&utterance.text, voice),
+                Err(_) => Err("the voice was lost".to_string()),
+            },
+            Err(e) => Err(e),
+        };
+        let failed = spoken.is_err();
+        let item = spoken.map(|pcm| Heard {
+            pcm,
+            verse: utterance.verse,
+            // The breath rides along, so pause and stop apply to it too.
+            breath: (utterance.pause_ms as u64 * RATE as u64 / 1000) as usize,
+        });
+        if out.send(item).is_err() || failed {
+            return;
+        }
+    }
+}
+
+/// Plays what was made until the chapter ends, the reader stops it, or the clock runs out.
+fn play(
+    controls: &Arc<Controls>,
+    state: &Arc<Mutex<ReadingState>>,
+    deadline: &Deadline,
+    heard: &std::sync::mpsc::Receiver<Result<Heard, String>>,
+) -> Result<(), String> {
     loop {
         if controls.stopped() {
             break;
         }
-        // The timer stops with the voice, so a paused reading cannot run it out: this is the guard
-        // for a deadline that came due as the verse was ending.
+        // The timer stops with the voice, so a paused reading cannot run it out: this is the guard for
+        // a deadline that came due as the verse was ending.
         if left_on(deadline).is_some_and(|left| left <= 0.0) {
             break;
         }
@@ -264,46 +334,50 @@ fn run(
             std::thread::sleep(Duration::from_millis(40));
             continue;
         }
-        let utterance = {
-            let mut guard = session.lock().map_err(|_| "the reading was lost".to_string())?;
-            guard.next()
-        };
-        let Some(utterance) = utterance else {
-            break;
-        };
-        let mut pcm = {
-            let engine = engine()?;
-            let mut engine = engine.lock().map_err(|_| "the voice was lost".to_string())?;
-            engine.speak(&utterance.text, voice)?
-        };
-        let verse_seconds = pcm.len() as f32 / RATE as f32;
-        // The deadline falls inside this verse: it is said only as far as the clock allows, and its
-        // last breath fades so no one is cut off mid-word.
-        let last = match left_on(deadline) {
-            Some(left) if left <= verse_seconds => {
-                let keep = ((left.max(0.0) * RATE as f32) as usize).min(pcm.len());
-                Arc::make_mut(&mut pcm).truncate(keep);
-                fade_out(&mut pcm);
-                true
+        match heard.recv() {
+            Ok(Ok(piece)) => {
+                if play_piece(piece, controls, state, deadline)? {
+                    break;
+                }
             }
-            _ => false,
-        };
-        // The breath after the verse rides along, so pause and stop apply to it too.
-        let breath = (utterance.pause_ms as u64 * RATE as u64 / 1000) as usize;
-        if breath > 0 {
-            Arc::make_mut(&mut pcm).extend(std::iter::repeat_n(0.0, breath));
-        }
-        if let Ok(mut state) = state.lock() {
-            state.verse = utterance.verse;
-            state.speaking = true;
-        }
-        player::play(&pcm, RATE, controls)?;
-        if last || controls.stopped() {
-            break;
+            Ok(Err(e)) => return Err(e),
+            // Nothing left to make: the chapter has been read.
+            Err(_) => break,
         }
     }
     controls.stop();
     Ok(())
+}
+
+/// Plays one piece, cut to the clock when the deadline falls inside it. `true` when it was the last.
+fn play_piece(
+    piece: Heard,
+    controls: &Arc<Controls>,
+    state: &Arc<Mutex<ReadingState>>,
+    deadline: &Deadline,
+) -> Result<bool, String> {
+    let mut pcm = piece.pcm;
+    let seconds = pcm.len() as f32 / RATE as f32;
+    // The deadline falls inside this piece: it is said only as far as the clock allows, and its last
+    // breath fades so no one is cut off mid-word.
+    let last = match left_on(deadline) {
+        Some(left) if left <= seconds => {
+            let keep = ((left.max(0.0) * RATE as f32) as usize).min(pcm.len());
+            Arc::make_mut(&mut pcm).truncate(keep);
+            fade_out(&mut pcm);
+            true
+        }
+        _ => false,
+    };
+    if piece.breath > 0 {
+        Arc::make_mut(&mut pcm).extend(std::iter::repeat_n(0.0, piece.breath));
+    }
+    if let Ok(mut state) = state.lock() {
+        state.verse = piece.verse;
+        state.speaking = true;
+    }
+    player::play(&pcm, RATE, controls)?;
+    Ok(last || controls.stopped())
 }
 
 /// Takes the voice down to nothing over the last `FADE_SECONDS`, so the ending is heard as an ending.

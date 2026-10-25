@@ -24,11 +24,7 @@ pub fn trim_silence(pcm: &[f32], rate: u32) -> Vec<f32> {
     let loud = |b: usize| {
         let lo = b * block;
         let hi = (lo + block).min(pcm.len());
-        if hi <= lo {
-            return false;
-        }
-        let level = (pcm[lo..hi].iter().map(|s| s * s).sum::<f32>() / (hi - lo) as f32).sqrt();
-        level >= QUIET
+        hi > lo && level(&pcm[lo..hi]) >= QUIET
     };
     let Some(first) = (0..blocks).find(|&b| loud(b)) else {
         return Vec::new();
@@ -38,6 +34,50 @@ pub fn trim_silence(pcm: &[f32], rate: u32) -> Vec<f32> {
     let start = first * block;
     let end = ((last + 1) * block + tail).min(pcm.len());
     pcm[start..end].to_vec()
+}
+
+/// The longest quiet the voice is allowed inside a sentence. The model pauses at punctuation for as
+/// long as a second — three times what we ask for between sentences — which stops the reading dead in
+/// the middle of a paragraph. A narrator does not do that, so the long ones are shortened to this.
+pub const LONGEST_GAP_MS: u32 = 350;
+
+/// The speech with any silence longer than `LONGEST_GAP_MS` shortened to it, so a passage runs at one
+/// pace instead of stopping wherever the model felt a full stop.
+pub fn cap_gaps(pcm: &[f32], rate: u32) -> Vec<f32> {
+    let block = ((rate as usize * BLOCK_MS as usize) / 1000).max(1);
+    let cap = (rate as usize * LONGEST_GAP_MS as usize) / 1000;
+    let mut out = Vec::with_capacity(pcm.len());
+    let mut i = 0;
+    while i < pcm.len() {
+        let hi = (i + block).min(pcm.len());
+        if level(&pcm[i..hi]) >= QUIET {
+            out.extend_from_slice(&pcm[i..hi]);
+            i = hi;
+            continue;
+        }
+        // A quiet stretch: measure to the next sound, then keep at most `cap` of it.
+        let start = i;
+        let mut j = hi;
+        while j < pcm.len() {
+            let next = (j + block).min(pcm.len());
+            if level(&pcm[j..next]) >= QUIET {
+                break;
+            }
+            j = next;
+        }
+        let keep = (j - start).min(cap);
+        out.extend_from_slice(&pcm[start..start + keep]);
+        i = j;
+    }
+    out
+}
+
+/// The level of a piece of audio, in full scale.
+fn level(slice: &[f32]) -> f32 {
+    if slice.is_empty() {
+        return 0.0;
+    }
+    (slice.iter().map(|s| s * s).sum::<f32>() / slice.len() as f32).sqrt()
 }
 
 #[cfg(test)]
@@ -100,6 +140,32 @@ mod tests {
         let trimmed = trim_silence(&pcm, RATE);
         // The buffer ends with the sound, so there is no room for a tail: nothing is invented.
         near(trimmed.len(), ms(200));
+    }
+
+    #[test]
+    fn a_second_of_quiet_inside_a_sentence_is_shortened_to_a_narrators_pause() {
+        let mut pcm = tone(300);
+        pcm.extend(quiet(1000));
+        pcm.extend(tone(300));
+        let capped = cap_gaps(&pcm, RATE);
+        near(capped.len(), ms(300) + ms(LONGEST_GAP_MS) + ms(300));
+        assert!(capped.len() < pcm.len(), "the long quiet was shortened");
+    }
+
+    #[test]
+    fn a_short_pause_is_left_exactly_as_the_voice_left_it() {
+        let mut pcm = tone(200);
+        pcm.extend(quiet(200));
+        pcm.extend(tone(200));
+        let capped = cap_gaps(&pcm, RATE);
+        near(capped.len(), pcm.len());
+        assert_eq!(capped.len(), pcm.len(), "nothing to do, so nothing was done");
+    }
+
+    #[test]
+    fn capping_a_sentence_with_no_long_quiet_changes_nothing() {
+        let speech = tone(900);
+        assert_eq!(cap_gaps(&speech, RATE), speech);
     }
 
     #[test]

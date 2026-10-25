@@ -108,7 +108,11 @@ impl Engine {
         // The model leaves most of a second of quiet after its last word. Trim it, or every pause
         // the reader asks for is really that pause plus the tail, and nothing can be tuned.
         let trimmed = bible_core::speak::trim_silence(&pcm, self.rate);
-        Ok(Arc::new(bible_core::speak::stretch(&trimmed, self.rate, voice.tempo())))
+        let stretched = bible_core::speak::stretch(&trimmed, self.rate, voice.tempo());
+        // The voice also pauses at punctuation for up to a second, three times the breath we ask for
+        // between sentences, which stops the reading dead mid-paragraph. Shorten those to a narrator's
+        // pause so a passage runs at one pace.
+        Ok(Arc::new(bible_core::speak::cap_gaps(&stretched, self.rate)))
     }
 }
 

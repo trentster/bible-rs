@@ -6,7 +6,7 @@ mod text;
 mod voices;
 
 pub use session::{Session, Sleep};
-pub use silence::{trim_silence, KEEP_TAIL_MS};
+pub use silence::{cap_gaps, trim_silence, KEEP_TAIL_MS, LONGEST_GAP_MS};
 pub mod silence;
 pub use stretch::stretch;
 pub use text::{
