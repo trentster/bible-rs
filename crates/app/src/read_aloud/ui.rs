@@ -1,10 +1,10 @@
 //! The Listen control and the reading bar.
 //!
-//! The reader is the product, so nothing here is permanent furniture. The toolbar speaker turns a
-//! quiet navy while a chapter is being read; pressing it raises a floating bar for a few seconds so
-//! the reader sees the result where they clicked; after that the bar settles into a hairline along
-//! the bottom edge with two pieces of small grey text. Touching the line brings the controls back in
-//! the same place, so nothing jumps.
+//! The reader is the product, so nothing here is permanent furniture — but the control the reader
+//! reaches for while listening is pause, and a pause that has to be found is worse than a bar that
+//! stays. Pressing the toolbar speaker raises the bar, and there it stays for as long as the reading
+//! lasts, in one place, one press away. It used to fall to a hairline along the bottom edge after a
+//! few seconds, which cost two presses — one on a thin strip — to stop the voice.
 
 use eframe::egui::{self, Align2, FontId, Pos2, Rect, Sense, Stroke, Ui, Vec2};
 
@@ -14,9 +14,7 @@ use bible_core::speak::{Session, Sleep, Voice};
 use super::reading::{Reading, ReadingState};
 use crate::theme::Palette;
 
-/// How long the floating bar stays up after the reader touches something.
-const BAR_SECONDS: f64 = 3.0;
-/// The status line's height, and the expanded bar's.
+/// The height of the note painted when a reading fails.
 const LINE_HEIGHT: f32 = 40.0;
 const BAR_HEIGHT: f32 = 52.0;
 const INSET: f32 = 18.0;
@@ -31,8 +29,6 @@ pub struct Listen {
     at: ChapterIdx,
     /// "Matthew 8" — the chapter being read, for the bar.
     label: String,
-    /// When the floating bar gives way to the status line, on the app's clock.
-    bar_until: f64,
     timer_open: bool,
     /// Where the stopwatch was drawn last frame, so a press on it does not close its own menu.
     timer_anchor: Rect,
@@ -50,7 +46,6 @@ impl Listen {
             reading: None,
             at: ChapterIdx::FIRST,
             label: String::new(),
-            bar_until: 0.0,
             timer_open: false,
             timer_anchor: Rect::NOTHING,
             menu_rect: Rect::NOTHING,
@@ -78,23 +73,21 @@ impl Listen {
     }
 
     /// Opens the controls for a chapter without speaking: the reader presses play when ready.
-    pub fn begin(&mut self, session: Session, voice: Voice, at: ChapterIdx, now: f64) {
+    pub fn begin(&mut self, session: Session, voice: Voice, at: ChapterIdx) {
         self.stop();
         self.preview = None;
         self.at = at;
         self.label = format!("{} {}", at.book().name(), at.chapter());
         self.reading = Some(Reading::open(session, voice));
         self.preview_left = None;
-        self.touched(now);
     }
 
     /// Paints the bar without speaking, for the screenshot harness.
-    pub fn show_preview(&mut self, verse: u8, left: f32, at: ChapterIdx, now: f64) {
+    pub fn show_preview(&mut self, verse: u8, left: f32, at: ChapterIdx) {
         self.at = at;
         self.label = format!("{} {}", at.book().name(), at.chapter());
         self.preview = Some(ReadingState { verse: Some(verse), speaking: true, ..Default::default() });
         self.preview_left = Some(left);
-        self.touched(now);
     }
 
     pub fn stop(&mut self) {
@@ -107,31 +100,24 @@ impl Listen {
     }
 
     /// The reader did something: show the controls again, then let them fade.
-    pub fn touched(&mut self, now: f64) {
-        self.bar_until = now + BAR_SECONDS;
-    }
-
-    pub fn pause(&mut self, now: f64) {
+    pub fn pause(&mut self) {
         if let Some(reading) = &self.reading {
             reading.pause();
         }
-        self.touched(now);
     }
 
-    pub fn resume(&mut self, now: f64) {
+    pub fn resume(&mut self) {
         if let Some(reading) = &self.reading {
             // Resuming puts the countdown back to the time it was holding, so a pause costs
             // nothing but the pause.
             reading.resume();
         }
-        self.touched(now);
     }
 
-    pub fn set_sleep(&mut self, sleep: Sleep, now: f64) {
+    pub fn set_sleep(&mut self, sleep: Sleep) {
         if let Some(reading) = &self.reading {
             reading.choose(sleep);
         }
-        self.touched(now);
     }
 
     /// What is left on the timer, if one is armed: straight off the clock.
@@ -158,7 +144,7 @@ impl Listen {
     /// Draws whatever the reader should see, and handles the controls.
     ///
     /// Returns false once the reading is over and there is nothing left to show.
-    pub fn show(&mut self, ui: &mut Ui, p: &Palette, area: Rect, now: f64) -> bool {
+    pub fn show(&mut self, ui: &mut Ui, p: &Palette, area: Rect) -> bool {
         if !self.active() {
             return false;
         }
@@ -188,43 +174,28 @@ impl Listen {
             self.reading = None;
             return false;
         }
-        // The bar falls back to the hairline only while it is actually speaking: that is the point
-        // at which the reader's eyes want the page back. A bar waiting for a press — Ready, or
-        // Paused — stays where it is, because nothing explains where it went if it slides away.
-        let expanded = now < self.bar_until || !state.speaking;
         // The bar lives in the foreground layer: in the reader's layer a click on a button also
         // reaches the verse underneath and selects text behind the controls.
         egui::Area::new(egui::Id::new("read-aloud-bar"))
             .order(egui::Order::Foreground)
             .fixed_pos(area.min)
             .show(ui.ctx(), |bar| {
-                if expanded {
-                    self.pill(bar, p, area, now, &state);
-                } else {
-                    self.line(bar, p, area, now, &state);
-                }
+                self.pill(bar, p, area, &state);
             });
-        // Only what moves asks for the next frame: a countdown running down, and the fall to the
-        // hairline while that is still to come. A bar waiting on the reader wakes for nothing.
-        if state.speaking || self.left().is_some() || now < self.bar_until {
+        // Only what moves asks for the next frame: a running countdown. A bar waiting on the reader
+        // wakes for nothing.
+        if state.speaking || self.left().is_some() {
             ui.ctx().request_repaint_after(std::time::Duration::from_millis(120));
         }
         true
     }
 
     /// The floating bar: what the reader gets when they press something.
-    fn pill(&mut self, ui: &mut Ui, p: &Palette, area: Rect, now: f64, state: &ReadingState) {
+    fn pill(&mut self, ui: &mut Ui, p: &Palette, area: Rect, state: &ReadingState) {
         let rect = Rect::from_center_size(
             Pos2::new(area.center().x, area.bottom() - INSET - BAR_HEIGHT / 2.0),
             Vec2::new(BAR_WIDTH, BAR_HEIGHT),
         );
-        // While the pointer is on the bar it stays up: letting it fall to the hairline under the
-        // cursor and spring back a frame later is the flicker the reader sees.
-        if self.timer_open
-            || ui.ctx().pointer_hover_pos().is_some_and(|pt| rect.expand(8.0).contains(pt))
-        {
-            self.bar_until = now + BAR_SECONDS;
-        }
         // The bar swallows clicks anywhere on itself: a press on its body should not select the
         // verse behind it. Its buttons are registered after this, so they win over it.
         let _ = ui.interact(rect, ui.id().with("read-aloud-pill"), Sense::click_and_drag());
@@ -236,120 +207,36 @@ impl Listen {
             Stroke::new(0.5, p.border),
             egui::StrokeKind::Inside,
         );
-        self.controls(ui, p, rect, now, state, true);
+        self.controls(ui, p, rect, state);
         if self.timer_open {
-            self.timer_menu(ui, p, rect, now);
+            self.timer_menu(ui, p, rect);
         }
     }
 
-    /// The hairline the bar fades into: two pieces of small grey text and nothing else.
-    fn line(&mut self, ui: &mut Ui, p: &Palette, area: Rect, now: f64, state: &ReadingState) {
-        let rect = Rect::from_min_size(
-            Pos2::new(area.left(), area.bottom() - LINE_HEIGHT),
-            Vec2::new(area.width(), LINE_HEIGHT),
-        );
-        let resp = ui.interact(rect, ui.id().with("read-aloud-line"), Sense::click());
-        if resp.hovered() {
-            // A pointer, so the line is known to be pressable — but nothing moves and nothing
-            // opens while the pointer merely crosses it.
-            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
-        }
-        if resp.clicked() || self.timer_open {
-            // A press brings the controls back in the same place, so nothing moves.
-            self.bar_until = now + BAR_SECONDS;
-            ui.painter().rect_filled(rect, 0.0, p.fill);
-            ui.painter().hline(
-                rect.x_range(),
-                rect.top(),
-                Stroke::new(0.5, p.separator),
-            );
-            self.controls(ui, p, rect, now, state, false);
-            if self.timer_open {
-                self.timer_menu(ui, p, rect, now);
-            }
-            return;
-        }
-        // Paper under the hairline: text scrolling beneath must not run through it.
-        ui.painter().rect_filled(rect, 0.0, p.paper);
-        ui.painter().hline(rect.x_range(), rect.top(), Stroke::new(0.5, p.separator));
-        let cy = rect.center().y;
-        let speaker = Rect::from_center_size(Pos2::new(rect.left() + INSET + 7.0, cy), Vec2::splat(15.0));
-        crate::icons::speaker(ui.painter(), speaker, p.accent_quiet);
-        ui.painter().text(
-            Pos2::new(rect.left() + INSET + 22.0, cy),
-            Align2::LEFT_CENTER,
-            format!("Listening · {}", self.where_is(state)),
-            FontId::proportional(11.5),
-            p.ink_2,
-        );
-        // The countdown on this line is painted in fixed pieces — a monospaced clock in a slot that
-        // never changes width — so a changing number cannot shuffle the words beside it.
-        if let Some(left) = self.left() {
-            let font = FontId::proportional(11.5);
-            let clock_font = FontId::monospace(11.5);
-            let ink = p.ink_3;
-            let width = |text: &str, font: FontId| {
-                ui.painter().layout_no_wrap(text.to_string(), font, ink).size().x
-            };
-            let slot = width("88:88", clock_font.clone());
-            let tail = " left";
-            let tail_width = width(tail, font.clone());
-            let right = rect.right() - INSET;
-            ui.painter().text(Pos2::new(right, cy), Align2::RIGHT_CENTER, tail, font.clone(), ink);
-            ui.painter().text(
-                Pos2::new(right - tail_width, cy),
-                Align2::RIGHT_CENTER,
-                clock(left),
-                clock_font,
-                ink,
-            );
-            let label = format!("{} ·", sleep_label(self.sleep()));
-            ui.painter().text(
-                Pos2::new(right - tail_width - slot - 6.0, cy),
-                Align2::RIGHT_CENTER,
-                label,
-                font,
-                ink,
-            );
-        }
-    }
-
-    /// Pause, where it is, the sleep timer and a close — laid out either in the pill or in the line.
+    /// Pause, where it is, the sleep timer and a close.
     fn controls(
         &mut self,
         ui: &mut Ui,
         p: &Palette,
         rect: Rect,
-        now: f64,
         state: &ReadingState,
-        floating: bool,
     ) {
         let cy = rect.center().y;
         let speaking = state.speaking;
-        // Pause / resume, on the left in the pill and on the right in the line.
-        let play_center = if floating {
-            Pos2::new(rect.left() + 32.0, cy)
-        } else {
-            Pos2::new(rect.right() - INSET - 130.0, cy)
-        };
-        let play_rect = Rect::from_center_size(play_center, Vec2::splat(if floating { 40.0 } else { 34.0 }));
+        // Pause / resume, on the left, in the same place whether the voice is running or not: the
+        // control the reader reaches for most is the one that must never move or hide.
+        let play_center = Pos2::new(rect.left() + 32.0, cy);
+        let play_rect = Rect::from_center_size(play_center, Vec2::splat(40.0));
         let play = ui.interact(play_rect, ui.id().with("read-aloud-play"), Sense::click());
-        if floating {
-            p.shadows.control.paint(ui.painter(), play_rect, 20.0);
-            ui.painter().circle_filled(play_rect.center(), 20.0, p.accent_quiet);
-        } else if play.hovered() {
-            ui.painter().circle_filled(play_rect.center(), 17.0, p.fill_strong);
-        }
-        let glyph = if speaking { p.on_accent } else { p.accent_quiet };
-        let glyph = if floating { p.on_accent } else { glyph };
+        p.shadows.control.paint(ui.painter(), play_rect, 20.0);
+        ui.painter().circle_filled(play_rect.center(), 20.0, p.accent_quiet);
+        let glyph = p.on_accent;
         if speaking {
-            let w = if floating { 3.0 } else { 2.5 };
-            let h = if floating { 11.0 } else { 9.0 };
             for dx in [-2.5, 2.5] {
                 ui.painter().rect_filled(
                     Rect::from_center_size(
-                        Pos2::new(play_rect.center().x + if floating { dx } else { dx * 0.8 }, play_rect.center().y),
-                        Vec2::new(w, h),
+                        Pos2::new(play_rect.center().x + dx, play_rect.center().y),
+                        Vec2::new(3.0, 11.0),
                     ),
                     1.0,
                     glyph,
@@ -360,37 +247,26 @@ impl Listen {
         }
         if play.clicked() {
             if speaking {
-                self.pause(now);
+                self.pause();
             } else {
-                self.resume(now);
+                self.resume();
             }
         }
 
-        let text = self.where_is(state);
-        if floating {
-            ui.painter().text(
-                Pos2::new(rect.left() + 58.0, cy - 7.0),
-                Align2::LEFT_CENTER,
-                text,
-                FontId::proportional(13.0),
-                p.ink,
-            );
-            ui.painter().text(
-                Pos2::new(rect.left() + 58.0, cy + 8.0),
-                Align2::LEFT_CENTER,
-                Self::listening_text(state),
-                FontId::proportional(10.5),
-                p.ink_2,
-            );
-        } else {
-            ui.painter().text(
-                Pos2::new(rect.left() + INSET + 8.0, cy),
-                Align2::LEFT_CENTER,
-                format!("Listening · {text}"),
-                FontId::proportional(12.0),
-                p.ink,
-            );
-        }
+        ui.painter().text(
+            Pos2::new(rect.left() + 58.0, cy - 7.0),
+            Align2::LEFT_CENTER,
+            self.where_is(state),
+            FontId::proportional(13.0),
+            p.ink,
+        );
+        ui.painter().text(
+            Pos2::new(rect.left() + 58.0, cy + 8.0),
+            Align2::LEFT_CENTER,
+            Self::listening_text(state),
+            FontId::proportional(10.5),
+            p.ink_2,
+        );
 
         // From the right: the close, a gap, then the time and the stopwatch that sets it. Laying
         // them out from the right keeps the countdown clear of the X however wide it gets.
@@ -439,7 +315,6 @@ impl Listen {
         }
         if timer.clicked() {
             self.timer_open = !self.timer_open;
-            self.touched(now);
         }
     }
 }
@@ -470,7 +345,7 @@ impl Listen {
     }
 
     /// The five ways the reading can end itself.
-    fn timer_menu(&mut self, ui: &mut Ui, p: &Palette, anchor: Rect, now: f64) {
+    fn timer_menu(&mut self, ui: &mut Ui, p: &Palette, anchor: Rect) {
         // A menu closes when the reader presses anywhere else, or presses Escape. The stopwatch
         // itself is excluded: it toggles the menu, and closing it here would fight that.
         let outside = ui
@@ -531,7 +406,7 @@ impl Listen {
                 crate::icons::tick(ui.painter(), row_rect, p.accent);
             }
             if resp.clicked() {
-                self.set_sleep(*sleep, now);
+                self.set_sleep(*sleep);
                 self.timer_open = false;
             }
         }

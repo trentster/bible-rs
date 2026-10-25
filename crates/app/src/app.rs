@@ -1141,7 +1141,7 @@ impl BibleApp {
                 let left: f32 = left.trim().parse().unwrap_or(892.0);
                 let now = ctx.input(|i| i.time);
                 let (c, _) = self.reader.location;
-                self.listen.show_preview(verse, left, c, now);
+                self.listen.show_preview(verse, left, c);
             }
             // `wait`: hold a frame, so a later step sees the page settled.
             "wait" => {}
@@ -1464,7 +1464,7 @@ impl BibleApp {
             &verses,
             bible_core::speak::Sleep::default(),
         );
-        self.listen.begin(session, self.settings.voice(), chapter, now);
+        self.listen.begin(session, self.settings.voice(), chapter);
     }
 
     /// The toolbar over the reading area (`ds-06` in the design): back/forward (after the
@@ -2750,7 +2750,7 @@ impl eframe::App for BibleApp {
                         egui::pos2(reader_rect.left(), reader_rect.top() + self.chrome.height),
                         reader_rect.max,
                     );
-                    self.listen.show(&mut reader_ui, p, area, now);
+                    self.listen.show(&mut reader_ui, p, area);
                     // The page follows the voice while there is one, and only then.
                     if let Some(at) = self.listen.following() {
                         self.reader.follow(at, now);
