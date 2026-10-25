@@ -12,6 +12,7 @@
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use bible_core::books::ChapterIdx;
 use bible_core::speak::{Session, Sleep, Voice};
 
 use super::engine;
@@ -25,6 +26,8 @@ const FADE_SECONDS: f32 = 0.9;
 /// What the reading bar shows, kept up to date by the reading thread.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ReadingState {
+    /// The chapter being heard, which is not always the chapter the bar was opened on.
+    pub chapter: Option<ChapterIdx>,
     pub verse: Option<u8>,
     pub speaking: bool,
     pub finished: bool,
@@ -35,6 +38,14 @@ pub struct ReadingState {
 /// When the reading ends by itself, on the machine's clock. Shared with the bar, so the countdown it
 /// paints and the moment the voice stops are the same moment.
 type Deadline = Arc<Mutex<Option<Instant>>>;
+
+/// Gives the reading the chapter after one that has just ended, with its session already playing.
+///
+/// A timer of fifteen minutes on a four-minute chapter used to stop after four minutes, which made the
+/// timer a cap rather than a sleep timer: someone falling asleep asked to be read to for fifteen minutes
+/// and got four. With a timer still running, the reading now carries on into the next chapter until the
+/// clock says stop. Without a timer there is nothing to carry on for, so the chapter's end is the end.
+pub type NextChapter = Arc<dyn Fn(ChapterIdx) -> Option<(ChapterIdx, Session)> + Send + Sync>;
 
 /// A chapter being read aloud, and the reader's control over it.
 pub struct Reading {
@@ -49,7 +60,8 @@ pub struct Reading {
 
 impl Reading {
     /// Opens a reading without speaking: the reader gets the controls, then presses play.
-    pub fn open(mut session: Session, voice: Voice) -> Reading {
+    pub fn open(session: Session, voice: Voice, at: ChapterIdx, next: Option<NextChapter>) -> Reading {
+        let mut session = session;
         session.pause();
         let controls = Arc::new(Controls::default());
         controls.set_paused(true);
@@ -62,14 +74,14 @@ impl Reading {
             let state = state.clone();
             let controls = controls.clone();
             let deadline = deadline.clone();
-            std::thread::spawn(move || speak(session, controls, state, deadline, voice));
+            std::thread::spawn(move || speak(session, controls, state, deadline, voice, at, next));
         }
         Reading { controls, session, state, deadline, held }
     }
 
     /// Starts speaking `session` in `voice` on its own thread.
-    pub fn start(session: Session, voice: Voice) -> Reading {
-        let reading = Reading::open(session, voice);
+    pub fn start(session: Session, voice: Voice, at: ChapterIdx, next: Option<NextChapter>) -> Reading {
+        let reading = Reading::open(session, voice, at, next);
         reading.resume();
         reading
     }
@@ -233,8 +245,10 @@ fn speak(
     state: Arc<Mutex<ReadingState>>,
     deadline: Deadline,
     voice: Voice,
+    at: ChapterIdx,
+    next: Option<NextChapter>,
 ) {
-    let outcome = run(&session, &controls, &state, &deadline, voice);
+    let outcome = run(&session, &controls, &state, &deadline, voice, at, next.as_ref());
     if let Ok(mut state) = state.lock() {
         state.speaking = false;
         state.finished = true;
@@ -255,6 +269,7 @@ const AHEAD: usize = 3;
 /// A piece of the chapter on its way to being heard.
 struct Heard {
     pcm: Arc<Vec<f32>>,
+    chapter: ChapterIdx,
     verse: Option<u8>,
     breath: usize,
 }
@@ -265,10 +280,12 @@ fn run(
     state: &Arc<Mutex<ReadingState>>,
     deadline: &Deadline,
     voice: Voice,
+    at: ChapterIdx,
+    next: Option<&NextChapter>,
 ) -> Result<(), String> {
     let (made, heard) = std::sync::mpsc::sync_channel::<Result<Heard, String>>(AHEAD);
     std::thread::scope(|scope| {
-        let maker = scope.spawn(move || make(session, controls, voice, made));
+        let maker = scope.spawn(move || make(session, controls, state, deadline, voice, at, next, made));
         let played = play(controls, state, deadline, &heard);
         controls.stop();
         // Dropping the listening end is what unblocks a maker waiting to hand a piece over.
@@ -282,7 +299,11 @@ fn run(
 fn make(
     session: &Arc<Mutex<Session>>,
     controls: &Arc<Controls>,
+    state: &Arc<Mutex<ReadingState>>,
+    deadline: &Deadline,
     voice: Voice,
+    mut at: ChapterIdx,
+    next: Option<&NextChapter>,
     out: std::sync::mpsc::SyncSender<Result<Heard, String>>,
 ) {
     loop {
@@ -296,16 +317,31 @@ fn make(
             std::thread::sleep(Duration::from_millis(40));
             continue;
         }
-        let (next, over) = {
+        let (next_utterance, over) = {
             let Ok(mut guard) = session.lock() else { return };
             match guard.next() {
                 Some(utterance) => (Some(utterance), false),
                 None => (None, guard.finished()),
             }
         };
-        let Some(utterance) = next else {
+        let Some(utterance) = next_utterance else {
             if over {
-                return;
+                // The chapter has been read. With time still on the timer, carry on into the next one;
+                // without a timer there is nothing to carry on for.
+                let Some(supplier) = next else { return };
+                if left_on(deadline).is_none() {
+                    return;
+                }
+                let Some((ahead, fresh)) = supplier(at) else { return };
+                if let Ok(mut guard) = session.lock() {
+                    *guard = fresh;
+                }
+                at = ahead;
+                if let Ok(mut state) = state.lock() {
+                    state.chapter = Some(ahead);
+                    state.verse = None;
+                }
+                continue;
             }
             // Paused between the check above and the question asked here: wait for play.
             std::thread::sleep(Duration::from_millis(20));
@@ -321,6 +357,7 @@ fn make(
         let failed = spoken.is_err();
         let item = spoken.map(|pcm| Heard {
             pcm,
+            chapter: at,
             verse: utterance.verse,
             // The breath rides along, so pause and stop apply to it too.
             breath: (utterance.pause_ms as u64 * RATE as u64 / 1000) as usize,
@@ -390,6 +427,7 @@ fn play_piece(
         Arc::make_mut(&mut pcm).extend(std::iter::repeat_n(0.0, piece.breath));
     }
     if let Ok(mut state) = state.lock() {
+        state.chapter = Some(piece.chapter);
         state.verse = piece.verse;
         state.speaking = true;
     }
@@ -425,7 +463,8 @@ mod tests {
         }
         let verses = vec![(1, "For this Melchisedec, king of Salem.".to_string())];
         let session = Session::new("Hebrews", 7, &verses, Sleep::Off);
-        let reading = Reading::open(session, Voice::by_name("Spencer").unwrap());
+        let at = ChapterIdx::FIRST;
+        let reading = Reading::open(session, Voice::by_name("Spencer").unwrap(), at, None);
         // Opening is not playing: nothing is said, and nothing is over.
         std::thread::sleep(Duration::from_millis(150));
         assert!(!reading.state().finished, "a reading nobody has played has not finished");

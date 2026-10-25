@@ -8,7 +8,7 @@ mod player;
 mod reading;
 mod ui;
 
-pub use reading::{Reading, ReadingState};
+pub use reading::{NextChapter, Reading, ReadingState};
 pub use ui::Listen;
 
 use bible_core::books::{ChapterIdx, VerseRef};
@@ -50,6 +50,23 @@ fn model_dir() -> Option<PathBuf> {
 
 fn voice_path(dir: &PathBuf, voice: Voice) -> PathBuf {
     dir.join(format!("{}.safetensors", voice.name.to_ascii_lowercase()))
+}
+
+/// The chapter after `from`, with what it says. How a reading carries on when the timer still has time
+/// on it: chapters a translation does not have are passed over, and `None` means there is no next one.
+pub fn next_chapter_text(
+    text: &bible_core::Translation,
+    from: ChapterIdx,
+) -> Option<(ChapterIdx, Vec<(u32, String)>)> {
+    let mut at = from.next()?;
+    loop {
+        let verses: Vec<(u32, String)> =
+            text.verses_in(at).map(|v| (v.number as u32, v.text.to_string())).collect();
+        if !verses.is_empty() {
+            return Some((at, verses));
+        }
+        at = at.next()?;
+    }
 }
 
 /// Loads the model once, with every shipped voice registered, and keeps the samples it has made.
@@ -142,20 +159,30 @@ mod tests {
     use super::*;
     use bible_core::books::BookId;
 
-    fn ps(number: u8) -> ChapterIdx {
-        ChapterIdx::new(BookId::PSALMS, number).unwrap()
+    fn kjv() -> bible_core::Translation {
+        bible_core::bundled::load("kjv").expect("kjv")
     }
 
     #[test]
-    fn a_selected_passage_says_where_to_read() {
-        // The reader scrolled ahead to Psalm 29 and selected text there while the top of the view
-        // still showed the end of Psalm 28. Listen must read 29.
-        let selected = (VerseRef::new(BookId::PSALMS, 29, 1), VerseRef::new(BookId::PSALMS, 29, 4));
-        assert_eq!(chapter_to_read(Some(selected), ps(28)), ps(29));
+    fn the_next_chapter_follows_the_reading() {
+        let (at, verses) = next_chapter_text(&kjv(), ChapterIdx::new(BookId::from_code("MAT").unwrap(), 4).unwrap())
+            .expect("matthew 5");
+        assert_eq!(at.chapter(), 5);
+        assert_eq!(verses.first().map(|(n, _)| *n), Some(1));
+        assert!(verses.len() > 40, "Matthew 5 has {} verses", verses.len());
     }
 
     #[test]
-    fn with_nothing_selected_the_top_of_the_view_decides() {
-        assert_eq!(chapter_to_read(None, ps(28)), ps(28));
+    fn the_next_chapter_crosses_into_the_next_book() {
+        let (at, verses) = next_chapter_text(&kjv(), ChapterIdx::new(BookId::from_code("MAL").unwrap(), 4).unwrap())
+            .expect("matthew 1");
+        assert_eq!(at.book().name(), "Matthew", "the reading carries on past the end of a book");
+        assert_eq!(at.chapter(), 1);
+        assert!(verses[0].1.contains("generation") || verses[0].1.contains("book"), "{}", verses[0].1);
+    }
+
+    #[test]
+    fn the_last_chapter_of_the_bible_has_nothing_after_it() {
+        assert!(next_chapter_text(&kjv(), ChapterIdx::LAST).is_none());
     }
 }

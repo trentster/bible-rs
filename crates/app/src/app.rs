@@ -1464,7 +1464,21 @@ impl BibleApp {
             &verses,
             bible_core::speak::Sleep::default(),
         );
-        self.listen.begin(session, self.settings.voice(), chapter);
+        // With time left on the sleep timer, the reading carries on into the next chapter rather than
+        // stopping short of the time the reader asked for.
+        let text = text.clone();
+        let next: crate::read_aloud::NextChapter = std::sync::Arc::new(move |after| {
+            let (at, verses) = crate::read_aloud::next_chapter_text(&text, after)?;
+            let mut session = bible_core::speak::Session::new(
+                at.book().name(),
+                at.chapter() as u16,
+                &verses,
+                bible_core::speak::Sleep::default(),
+            );
+            session.play();
+            Some((at, session))
+        });
+        self.listen.begin(session, self.settings.voice(), chapter, Some(next));
     }
 
     /// The toolbar over the reading area (`ds-06` in the design): back/forward (after the

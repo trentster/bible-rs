@@ -11,7 +11,7 @@ use eframe::egui::{self, Align2, FontId, Pos2, Rect, Sense, Stroke, Ui, Vec2};
 use bible_core::books::{ChapterIdx, VerseRef};
 use bible_core::speak::{Session, Sleep, Voice};
 
-use super::reading::{Reading, ReadingState};
+use super::reading::{NextChapter, Reading, ReadingState};
 use crate::theme::Palette;
 
 /// The height of the note painted when a reading fails.
@@ -27,8 +27,6 @@ pub struct Listen {
     /// "Psalms 23" — what the bar calls the chapter.
     /// The chapter being read: where the bar's label and the verse the page follows come from.
     at: ChapterIdx,
-    /// "Matthew 8" — the chapter being read, for the bar.
-    label: String,
     timer_open: bool,
     /// Where the stopwatch was drawn last frame, so a press on it does not close its own menu.
     timer_anchor: Rect,
@@ -45,7 +43,6 @@ impl Listen {
         Listen {
             reading: None,
             at: ChapterIdx::FIRST,
-            label: String::new(),
             timer_open: false,
             timer_anchor: Rect::NOTHING,
             menu_rect: Rect::NOTHING,
@@ -73,19 +70,17 @@ impl Listen {
     }
 
     /// Opens the controls for a chapter without speaking: the reader presses play when ready.
-    pub fn begin(&mut self, session: Session, voice: Voice, at: ChapterIdx) {
+    pub fn begin(&mut self, session: Session, voice: Voice, at: ChapterIdx, next: Option<NextChapter>) {
         self.stop();
         self.preview = None;
         self.at = at;
-        self.label = format!("{} {}", at.book().name(), at.chapter());
-        self.reading = Some(Reading::open(session, voice));
+        self.reading = Some(Reading::open(session, voice, at, next));
         self.preview_left = None;
     }
 
     /// Paints the bar without speaking, for the screenshot harness.
     pub fn show_preview(&mut self, verse: u8, left: f32, at: ChapterIdx) {
         self.at = at;
-        self.label = format!("{} {}", at.book().name(), at.chapter());
         self.preview = Some(ReadingState { verse: Some(verse), speaking: true, ..Default::default() });
         self.preview_left = Some(left);
     }
@@ -134,7 +129,8 @@ impl Listen {
             return None;
         }
         let verse = state.verse?;
-        Some(VerseRef::new(self.at.book(), self.at.chapter(), verse))
+        let at = self.chapter_of(&state);
+        Some(VerseRef::new(at.book(), at.chapter(), verse))
     }
 
     pub fn sleep(&self) -> Sleep {
@@ -331,11 +327,19 @@ impl Listen {
         }
     }
 
-    /// "Psalms 23:2" — where the reading has got to.
+    /// The chapter being heard — which is not always the one the bar was opened on, because a reading
+    /// with time still on its timer carries on into the next.
+    fn chapter_of(&self, state: &ReadingState) -> ChapterIdx {
+        state.chapter.unwrap_or(self.at)
+    }
+
+    /// "Psalms 23:2" — where the reading has got to, in the chapter being heard.
     fn where_is(&self, state: &ReadingState) -> String {
+        let at = self.chapter_of(state);
+        let base = format!("{} {}", at.book().name(), at.chapter());
         match state.verse {
-            Some(verse) => format!("{}:{}", self.label, verse),
-            None => self.label.clone(),
+            Some(verse) => format!("{base}:{verse}"),
+            None => base,
         }
     }
 
@@ -456,13 +460,19 @@ mod tests {
     }
 
     #[test]
-    fn where_the_reading_is_names_the_chapter() {
+    fn where_the_reading_is_names_the_chapter_being_heard() {
+        let psalm = bible_core::books::BookId::PSALMS;
+        let at = ChapterIdx::new(psalm, 23).unwrap();
         let mut listen = Listen::new();
-        listen.label = "Psalms 23".to_string();
+        listen.at = at;
         let state = ReadingState { verse: Some(2), ..Default::default() };
         assert_eq!(listen.where_is(&state), "Psalms 23:2");
-        let before = ReadingState::default();
-        assert_eq!(listen.where_is(&before), "Psalms 23");
+        assert_eq!(listen.where_is(&ReadingState::default()), "Psalms 23");
+        // A reading that has carried on into the next chapter names that chapter, not the one it
+        // started in — the bar follows the voice, which is the only thing that is true.
+        let later = ChapterIdx::new(psalm, 24).unwrap();
+        let carried = ReadingState { chapter: Some(later), verse: Some(6), ..Default::default() };
+        assert_eq!(listen.where_is(&carried), "Psalms 24:6");
     }
 
 
