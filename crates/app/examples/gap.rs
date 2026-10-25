@@ -39,13 +39,18 @@ fn main() {
     let checkpoint =
         Checkpoint::locate(dir.to_str().unwrap(), ResolveOptions { quant: Quant::Q80, weights: None })
             .expect("model");
-    let voice = bible_core::speak::VOICES[0];
-    let mut tts = checkpoint
-        .builder(Lang::En)
-        .device(DeviceKind::Cpu)
-        .add_voice(voice.name, dir.join(format!("{}.safetensors", voice.name.to_ascii_lowercase())))
-        .build()
-        .expect("voice");
+    let voice = bible_core::speak::Voice::by_name(
+        &std::env::var("BIBLE_RS_GAP_VOICE").unwrap_or_else(|_| "Russell".to_string()),
+    )
+    .unwrap_or(bible_core::speak::VOICES[0]);
+    let mut builder = checkpoint.builder(Lang::En).device(DeviceKind::Cpu);
+    for each in bible_core::speak::VOICES {
+        builder = builder.add_voice(
+            each.name,
+            dir.join(format!("{}.safetensors", each.name.to_ascii_lowercase())),
+        );
+    }
+    let mut tts = builder.build().expect("voice");
     checkpoint.register_voices(&mut tts);
     let rate = tts.sample_rate();
 
@@ -88,6 +93,14 @@ fn main() {
             found.iter().cloned().fold(0.0, f64::max),
         );
     }
+    let sample: String = said
+        .iter()
+        .find(|u| u.verse.is_some())
+        .map(|u| u.text.clone())
+        .unwrap_or_default();
+    if !sample.is_empty() {
+        voices(&mut tts, rate, &sample);
+    }
     println!(
         "\nthis build: {:?} ms at a sentence end, {:?} ms where a long sentence is cut",
         bible_core::speak::SENTENCE_PAUSE_MS,
@@ -96,6 +109,48 @@ fn main() {
     for u in said.iter().take(3) {
         let start: String = u.text.chars().take(54).collect();
         println!("  verse {:>7?} pause {:>3} ms — {start}", u.verse, u.pause_ms);
+    }
+}
+
+/// Every voice, measured the same way: the quiet it leaves, and the longest pause it can still produce
+/// once the cap is applied. The trims and the cap are absolute thresholds, so they must hold for all four.
+fn voices(tts: &mut ptts::synth::Synth, rate: u32, text: &str) {
+    println!("\nevery voice, same text ({} words):", text.split_whitespace().count());
+    for voice in bible_core::speak::VOICES {
+        let options = SpeechOptions::default().voice(voice.name);
+        let mut pcm = Vec::new();
+        for chunk in tts.stream_with(text, &options).expect("speak") {
+            pcm.extend_from_slice(&chunk.expect("chunk"));
+        }
+        let tail_ms = {
+            let block = (rate as usize / 100).max(1);
+            let mut quiet = 0;
+            let mut i = pcm.len();
+            while i > block {
+                let lo = i - block;
+                let level = (pcm[lo..i].iter().map(|s| s * s).sum::<f32>() / block as f32).sqrt();
+                if level < QUIET {
+                    quiet += block;
+                    i = lo;
+                } else {
+                    break;
+                }
+            }
+            quiet as f64 * 1000.0 / rate as f64
+        };
+        let trimmed = bible_core::speak::trim_silence(&pcm, rate);
+        let stretched = bible_core::speak::stretch(&trimmed, rate, voice.tempo());
+        let before = gaps(&stretched, rate).iter().cloned().fold(0.0, f64::max);
+        let capped = bible_core::speak::cap_gaps(&stretched, rate);
+        let after = gaps(&capped, rate).iter().cloned().fold(0.0, f64::max);
+        println!(
+            "  {:<8} {:>5.2}×  leaves {:>4.0} ms of quiet | longest pause before cap {:>4.0} ms, after {:>4.0} ms",
+            voice.name,
+            voice.tempo(),
+            tail_ms,
+            before,
+            after
+        );
     }
 }
 
