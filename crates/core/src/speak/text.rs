@@ -93,6 +93,8 @@ const SAY_AS: &[(&str, &str)] = &[
     ("shewed", "showed"),
     ("sheweth", "showeth"),
     ("shewbread", "showbread"),
+    // Chosen by ear from six respellings through the engine: "bez-a-lail".
+    ("bezaleel", "bezalayl"),
 ];
 
 /// Respells the words in [`SAY_AS`], leaving everything else — punctuation, capitals, apostrophes —

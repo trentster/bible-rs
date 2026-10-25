@@ -142,6 +142,15 @@ impl Engine {
     }
 }
 
+/// Synthesises `text` in `voice` at the approved pace, outside any reading: how the Settings sample
+/// works, and how a list of words can be auditioned.
+pub fn render(text: &str, voice: Voice) -> Result<(Vec<f32>, u32), String> {
+    let engine = engine()?;
+    let pcm = engine.lock().map_err(|_| "the voice was lost".to_string())?.speak(text, voice)?;
+    let rate = engine.lock().map(|e| e.rate).unwrap_or(24_000);
+    Ok((pcm.as_ref().clone(), rate))
+}
+
 /// Says the sample through the default output device, off the UI thread.
 pub fn play_sample(voice: Voice) {
     std::thread::spawn(move || match sample(voice) {

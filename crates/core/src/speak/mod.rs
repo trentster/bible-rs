@@ -306,4 +306,12 @@ mod tests {
         assert_eq!(narration("ye, and ye."), "yee, and yee.");
         assert_eq!(narration("O ye of little faith"), "O yee of little faith");
     }
+
+    #[test]
+    fn bezaleel_is_said_bez_a_lail() {
+        // The spelling the reader chose by ear: the narrator read "Bezaleel" its own way, and no
+        // rule derives the right one, so it is written into the table.
+        assert_eq!(narration("Bezaleel"), "Bezalayl");
+        assert_eq!(narration("and Bezaleel the son of Uri"), "and Bezalayl the son of Uri");
+    }
 }
