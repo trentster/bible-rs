@@ -1618,9 +1618,89 @@ fn theme_cards(ui: &mut Ui, settings: &mut Settings, actions: &mut Vec<Action>) 
 /// Appearance (frame 24): theme, accent colour, the toolbar's translation, the sidebar; names
 /// for the highlight colours; motion.
 /// Read aloud (voice): four voices, one pace, chosen by name and described plainly.
+/// The one-time download, shown where the voices would be: what it is, what it costs, and how far
+/// along it is. Deliberately the whole page until it lands — a list of voices that cannot speak
+/// would be a lie with a radio button beside it.
+fn voice_setup(ui: &mut Ui, p: &Palette) {
+    use crate::read_aloud::install::{self, Status};
+    let fetch = install::shared();
+    let status = fetch.status();
+    let failed = matches!(status, Status::Failed(_));
+    let width = ui.available_width();
+    let (card, _) = ui.allocate_exact_size(vec2(width, 84.0), Sense::hover());
+    ui.painter().rect_filled(card, 12.0, p.fill);
+    ui.painter().rect_stroke(card, 12.0, Stroke::new(1.0, p.border), egui::StrokeKind::Inside);
+
+    let inner = card.shrink2(vec2(16.0, 14.0));
+    ui.painter().text(
+        pos2(inner.left(), inner.center().y - 17.0),
+        Align2::LEFT_CENTER,
+        "The voice is not on this machine yet",
+        text::UI_STRONG.font(),
+        p.ink,
+    );
+    let note = match &status {
+        Status::Failed(why) => format!("That did not finish: {why}"),
+        Status::Fetching { .. } => {
+            "Fetching the voice. Reading never uses a connection after this.".to_string()
+        }
+        _ => "Sixty-three megabytes, fetched once. After that, reading never uses a connection.".to_string(),
+    };
+    let mut job = LayoutJob::simple(
+        note,
+        text::SMALL.font(),
+        if failed { p.accent } else { p.ink_2 },
+        inner.width() - 170.0,
+    );
+    job.sections[0].format.line_height = Some(16.0);
+    let galley = ui.painter().layout_job(job);
+    ui.painter().galley(pos2(inner.left(), inner.center().y + 1.0), galley, p.ink_2);
+
+    // Progress or the button, in the same place on the right, so one does not move the other.
+    if let Status::Fetching { done, of } = status {
+        let track =
+            Rect::from_min_size(pos2(inner.right() - 150.0, inner.center().y + 4.0), vec2(150.0, 4.0));
+        ui.painter().rect_filled(track, 2.0, p.border);
+        let fraction = (done as f32 / of.max(1) as f32).clamp(0.0, 1.0);
+        ui.painter().rect_filled(
+            Rect::from_min_size(track.min, vec2(track.width() * fraction, 4.0)),
+            2.0,
+            p.accent,
+        );
+        ui.painter().text(
+            pos2(track.left(), track.top() - 6.0),
+            Align2::LEFT_BOTTOM,
+            format!("{:.0} of {:.0} MB", done as f32 / 1e6, of as f32 / 1e6),
+            text::SMALL.font(),
+            p.ink_2,
+        );
+        ui.ctx().request_repaint();
+    } else {
+        let label = if failed { "Try again" } else { "Download" };
+        let w = widgets::primary_button_width(ui, label, false);
+        let button = Rect::from_center_size(pos2(inner.right() - w / 2.0, inner.center().y), vec2(w, 28.0));
+        if widgets::primary_button(ui, p, button, label, None, ui.id().with("voice-download")).clicked() {
+            fetch.start();
+        }
+    }
+    ui.add_space(10.0);
+    footnote(
+        ui,
+        p,
+        "The voice is Phonon-31m, running on this machine. Nothing is spoken in the cloud, and \
+         nothing about what you read is sent anywhere.",
+    );
+}
+
 fn read_aloud(ui: &mut Ui, settings: &mut Settings) {
     let p = settings.theme.palette();
     group_title(ui, p, "Voice");
+    // The voice is not inside the app: it is fetched once, here, on the reader's instruction. Until
+    // it has arrived there is nothing to choose between, so this card is the whole page.
+    if !crate::read_aloud::install::installed() {
+        voice_setup(ui, p);
+        return;
+    }
     let voices = bible_core::speak::VOICES;
     let current = settings.voice().name;
     let mut chosen: Option<&'static str> = None;

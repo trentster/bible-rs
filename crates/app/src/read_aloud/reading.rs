@@ -196,11 +196,7 @@ impl Reading {
         let deadline = self.deadline.clone();
         std::thread::spawn(move || {
             std::thread::sleep(seconds);
-            let run_out = deadline
-                .lock()
-                .ok()
-                .and_then(|at| *at)
-                .is_some_and(|at| at <= Instant::now());
+            let run_out = deadline.lock().ok().and_then(|at| *at).is_some_and(|at| at <= Instant::now());
             if run_out {
                 controls.stop();
             }
@@ -515,8 +511,7 @@ mod tests {
     fn a_new_chapter_does_not_take_the_timer_with_it() {
         let verses = vec![(1, "For this Melchisedec, king of Salem.".to_string())];
         let session = Session::new("Hebrews", 7, &verses, Sleep::Off);
-        let reading =
-            Reading::open(session, Voice::by_name("Spencer").unwrap(), ChapterIdx::FIRST, None);
+        let reading = Reading::open(session, Voice::by_name("Spencer").unwrap(), ChapterIdx::FIRST, None);
         reading.choose(Sleep::Minutes(15));
         assert_eq!(reading.sleep(), Sleep::Minutes(15));
         // A roll-over swaps the chapter's session underneath the reading, and the replacement knows

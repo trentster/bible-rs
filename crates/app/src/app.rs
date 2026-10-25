@@ -878,12 +878,8 @@ impl BibleApp {
             Action::OpenVerseMenu(pos) => {
                 if !self.reader.selected_refs().is_empty() {
                     // The feature works out the target: the selected words, else the clicked word.
-                    let word = crate::lookup_popover::target(
-                        &self.reader,
-                        &self.library,
-                        &self.settings,
-                        pos,
-                    );
+                    let word =
+                        crate::lookup_popover::target(&self.reader, &self.library, &self.settings, pos);
                     // Warm the dictionary off the main thread, so the first lookup finds the index
                     // built. Only when there is a word to look up: a menu without a Look Up item
                     // costs nothing.
@@ -1169,8 +1165,7 @@ impl BibleApp {
                 self.reader.set_selection(bible_core::reference::parse(r).map(|r| r.verse_ref()));
                 let pos = egui::pos2(x.parse().unwrap_or(600.0), y.parse().unwrap_or(352.0));
                 let word = crate::lookup_popover::target(&self.reader, &self.library, &self.settings, pos);
-                self.verse_menu =
-                    Some(crate::verse_menu::VerseMenu::new(pos, word).with_first_highlighted());
+                self.verse_menu = Some(crate::verse_menu::VerseMenu::new(pos, word).with_first_highlighted());
             }
             "share" => actions.push(Action::ShareImage),
             "size" => {
@@ -1444,8 +1439,7 @@ impl BibleApp {
             self.listen.stop();
             return;
         }
-        let chapter =
-            crate::read_aloud::chapter_to_read(self.reader.selection, self.reader.location.0);
+        let chapter = crate::read_aloud::chapter_to_read(self.reader.selection, self.reader.location.0);
         let Ok(text) = self.library.load(&self.settings.translation) else {
             return;
         };
@@ -1456,12 +1450,8 @@ impl BibleApp {
         }
         let book = chapter.book().name();
         let number = chapter.chapter() as u16;
-        let session = bible_core::speak::Session::new(
-            book,
-            number,
-            &verses,
-            bible_core::speak::Sleep::default(),
-        );
+        let session =
+            bible_core::speak::Session::new(book, number, &verses, bible_core::speak::Sleep::default());
         // With time left on the sleep timer, the reading carries on into the next chapter rather than
         // stopping short of the time the reader asked for.
         let text = text.clone();

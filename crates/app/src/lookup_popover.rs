@@ -95,7 +95,13 @@ impl LookUp {
     }
 
     /// Draws the popover hanging from the looked-up words; returns `true` to close.
-    pub fn show(&mut self, ctx: &egui::Context, p: &Palette, reader: &Reader, _actions: &mut Vec<Action>) -> bool {
+    pub fn show(
+        &mut self,
+        ctx: &egui::Context,
+        p: &Palette,
+        reader: &Reader,
+        _actions: &mut Vec<Action>,
+    ) -> bool {
         if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, Key::Escape)) {
             return true;
         }
@@ -138,7 +144,8 @@ impl LookUp {
         let downward = below >= height || below >= above;
         let left =
             (anchor.center().x - WIDTH / 2.0).clamp(screen.left() + 12.0, screen.right() - 12.0 - WIDTH);
-        let top = if downward { anchor.bottom() + 3.0 + BEAK.y } else { anchor.top() - 3.0 - BEAK.y - height };
+        let top =
+            if downward { anchor.bottom() + 3.0 + BEAK.y } else { anchor.top() - 3.0 - BEAK.y - height };
         let rect = Rect::from_min_size(pos2(left, top), vec2(WIDTH, height));
 
         let mut close = false;
@@ -161,11 +168,32 @@ impl LookUp {
                 painter.add(egui::Shape::line(vec![l, tip, r], Stroke::new(0.75, p.border)));
 
                 let x = rect.left() + 16.0;
-                text(&painter, x, rect.top() + 14.0, 20.0, &self.word, theme::ui_semibold(20.0), p.ink, false);
-                text(&painter, x, rect.top() + 40.0, 12.0, &self.reference, theme::ui_font(12.0), p.ink_2, false);
-                let close_r =
-                    Rect::from_min_size(pos2(rect.right() - 12.0 - 28.0, rect.top() + 16.0), vec2(28.0, 28.0));
-                if widgets::round_button(ui, p, close_r, icons::close, ui.id().with("lookup-close")).clicked() {
+                text(
+                    &painter,
+                    x,
+                    rect.top() + 14.0,
+                    20.0,
+                    &self.word,
+                    theme::ui_semibold(20.0),
+                    p.ink,
+                    false,
+                );
+                text(
+                    &painter,
+                    x,
+                    rect.top() + 40.0,
+                    12.0,
+                    &self.reference,
+                    theme::ui_font(12.0),
+                    p.ink_2,
+                    false,
+                );
+                let close_r = Rect::from_min_size(
+                    pos2(rect.right() - 12.0 - 28.0, rect.top() + 16.0),
+                    vec2(28.0, 28.0),
+                );
+                if widgets::round_button(ui, p, close_r, icons::close, ui.id().with("lookup-close")).clicked()
+                {
                     close = true;
                 }
                 painter.hline(rect.x_range(), rect.top() + 64.5, Stroke::new(1.0, p.separator));

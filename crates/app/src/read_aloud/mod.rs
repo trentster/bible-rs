@@ -1,9 +1,11 @@
 //! Read aloud: the on-device voice.
 //!
 //! The words live in `bible_core::speak`; this module owns the sound — the model, the audio device
-//! and the tempo the reader approved. Nothing here touches the network: the weights are bundled
-//! beside the app and every sample is made on this machine.
+//! and the tempo the reader approved. Reading itself never touches the network. The one exception is
+//! `install`: on the reader's own instruction it fetches the voice once, checks every file against
+//! its SHA-256, and after that nothing is fetched again.
 
+pub mod install;
 mod player;
 mod reading;
 mod ui;
@@ -44,6 +46,9 @@ fn model_dir() -> Option<PathBuf> {
         candidates.push(dir.join("speech"));
         candidates.push(dir.join("../Resources/speech"));
     }
+    // An installed voice, fetched once on the reader's instruction. It lives beside the study
+    // database, so a development copy and a real one never share a model.
+    candidates.push(crate::data_dir().join("speech"));
     candidates.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../data/speech"));
     candidates.into_iter().find(|dir| dir.join("model.q8.gguf").exists())
 }
@@ -82,7 +87,9 @@ fn engine() -> Result<&'static Mutex<Engine>, String> {
     if let Some(engine) = ENGINE.get() {
         return Ok(engine);
     }
-    let dir = model_dir().ok_or_else(|| "the voice model is not installed".to_string())?;
+    let dir = model_dir().ok_or_else(|| {
+        "the voice is not on this machine yet: Settings → Voice has the one-time download".to_string()
+    })?;
     let dir_str = dir.to_str().ok_or("the model path is not UTF-8")?.to_string();
     let checkpoint = Checkpoint::locate(&dir_str, ResolveOptions { quant: Quant::Q80, weights: None })
         .map_err(|e| format!("the voice model could not be opened: {e}"))?;
@@ -115,10 +122,8 @@ impl Engine {
     fn speak(&mut self, text: &str, voice: Voice) -> Result<Arc<Vec<f32>>, String> {
         let options = SpeechOptions::default().voice(voice.name);
         let mut pcm = Vec::new();
-        let stream = self
-            .tts
-            .stream_with(text, &options)
-            .map_err(|e| format!("the voice could not speak: {e}"))?;
+        let stream =
+            self.tts.stream_with(text, &options).map_err(|e| format!("the voice could not speak: {e}"))?;
         for chunk in stream {
             pcm.extend_from_slice(&chunk.map_err(|e| format!("the voice stopped early: {e}"))?);
         }
@@ -165,8 +170,9 @@ mod tests {
 
     #[test]
     fn the_next_chapter_follows_the_reading() {
-        let (at, verses) = next_chapter_text(&kjv(), ChapterIdx::new(BookId::from_code("MAT").unwrap(), 4).unwrap())
-            .expect("matthew 5");
+        let (at, verses) =
+            next_chapter_text(&kjv(), ChapterIdx::new(BookId::from_code("MAT").unwrap(), 4).unwrap())
+                .expect("matthew 5");
         assert_eq!(at.chapter(), 5);
         assert_eq!(verses.first().map(|(n, _)| *n), Some(1));
         assert!(verses.len() > 40, "Matthew 5 has {} verses", verses.len());
@@ -174,8 +180,9 @@ mod tests {
 
     #[test]
     fn the_next_chapter_crosses_into_the_next_book() {
-        let (at, verses) = next_chapter_text(&kjv(), ChapterIdx::new(BookId::from_code("MAL").unwrap(), 4).unwrap())
-            .expect("matthew 1");
+        let (at, verses) =
+            next_chapter_text(&kjv(), ChapterIdx::new(BookId::from_code("MAL").unwrap(), 4).unwrap())
+                .expect("matthew 1");
         assert_eq!(at.book().name(), "Matthew", "the reading carries on past the end of a book");
         assert_eq!(at.chapter(), 1);
         assert!(verses[0].1.contains("generation") || verses[0].1.contains("book"), "{}", verses[0].1);

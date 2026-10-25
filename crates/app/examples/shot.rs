@@ -191,12 +191,7 @@ fn press(
     harness.hover_at(pos);
     harness.step();
     for pressed in [true, false] {
-        harness.event(egui::Event::PointerButton {
-            pos,
-            button,
-            pressed,
-            modifiers,
-        });
+        harness.event(egui::Event::PointerButton { pos, button, pressed, modifiers });
         harness.step();
     }
     harness.event(egui::Event::ModifiersChanged(egui::Modifiers::NONE));
@@ -240,13 +235,9 @@ fn run_step(harness: &mut Harness<'_, BibleApp>, step: &str) {
             eprintln!("{step} → {kind}:{}", at(p));
             match kind {
                 "click" => press(harness, p, egui::PointerButton::Primary, egui::Modifiers::NONE),
-                "shift-click" => {
-                    press(harness, p, egui::PointerButton::Primary, egui::Modifiers::SHIFT)
-                }
+                "shift-click" => press(harness, p, egui::PointerButton::Primary, egui::Modifiers::SHIFT),
                 // What opens the verse menu on a word.
-                "right-click" => {
-                    press(harness, p, egui::PointerButton::Secondary, egui::Modifiers::NONE)
-                }
+                "right-click" => press(harness, p, egui::PointerButton::Secondary, egui::Modifiers::NONE),
                 _ => {
                     harness.hover_at(p);
                     harness.run_steps(4);

@@ -52,12 +52,7 @@ impl VerseMenu {
         // A word under the click leads the menu. Naming it in the label made the item as long as
         // the word, so it just says what it does.
         if word.is_some() {
-            items.push(item(
-                icons::text_cursor,
-                "Look Up",
-                "⌃⌘D",
-                Some(Action::LookUpWord),
-            ));
+            items.push(item(icons::text_cursor, "Look Up", "⌃⌘D", Some(Action::LookUpWord)));
             items.push(Line::Separator);
         }
         items.extend([

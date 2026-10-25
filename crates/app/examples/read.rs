@@ -39,23 +39,17 @@ fn main() {
     session.seek_to_verse(6);
     let voice = Voice::by_name("Spencer").unwrap();
     let started = Instant::now();
-    let at = bible_core::books::ChapterIdx::new(
-        bible_core::books::BookId::from_code("HEB").expect("hebrews"),
-        7,
-    )
-    .expect("hebrews 7");
+    let at =
+        bible_core::books::ChapterIdx::new(bible_core::books::BookId::from_code("HEB").expect("hebrews"), 7)
+            .expect("hebrews 7");
     // With a timer running, the reading carries on into the next chapter. Without one asked for here,
     // it stops at the end of the chapter as it always did.
     let next: Option<bible_rs::read_aloud::NextChapter> = if std::env::var("READ_ROLL_ON").is_ok() {
         let kjv = std::sync::Arc::new(bible_core::bundled::load("kjv").expect("kjv"));
         Some(std::sync::Arc::new(move |after| {
             let (next_at, verses) = bible_rs::read_aloud::next_chapter_text(&kjv, after)?;
-            let mut session = Session::new(
-                next_at.book().name(),
-                next_at.chapter() as u16,
-                &verses,
-                Sleep::default(),
-            );
+            let mut session =
+                Session::new(next_at.book().name(), next_at.chapter() as u16, &verses, Sleep::default());
             session.play();
             Some((next_at, session))
         }))

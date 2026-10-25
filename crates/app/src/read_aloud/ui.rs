@@ -123,8 +123,7 @@ impl Listen {
 
     /// What is left on the timer, if one is armed: straight off the clock.
     fn left(&self) -> Option<f32> {
-        self.preview_left
-            .or_else(|| self.reading.as_ref().and_then(|reading| reading.left()))
+        self.preview_left.or_else(|| self.reading.as_ref().and_then(|reading| reading.left()))
     }
 
     /// The verse being spoken right now, for the page to follow. `None` whenever there is no sound:
@@ -216,13 +215,7 @@ impl Listen {
     }
 
     /// Pause, where it is, the sleep timer and a close.
-    fn controls(
-        &mut self,
-        ui: &mut Ui,
-        p: &Palette,
-        rect: Rect,
-        state: &ReadingState,
-    ) {
+    fn controls(&mut self, ui: &mut Ui, p: &Palette, rect: Rect, state: &ReadingState) {
         let cy = rect.center().y;
         let speaking = state.speaking;
         // Pause / resume, on the left, in the same place whether the voice is running or not: the
@@ -245,7 +238,11 @@ impl Listen {
                 );
             }
         } else {
-            crate::icons::play(ui.painter(), Rect::from_center_size(play_rect.center(), Vec2::splat(14.0)), glyph);
+            crate::icons::play(
+                ui.painter(),
+                Rect::from_center_size(play_rect.center(), Vec2::splat(14.0)),
+                glyph,
+            );
         }
         if play.clicked() {
             if speaking {
@@ -298,10 +295,7 @@ impl Listen {
         let icon_space = 26.0;
         let gap = if clock_width > 0.0 { 6.0 } else { 0.0 };
         let group_left = group_right - clock_width - gap - icon_space;
-        let group = Rect::from_min_max(
-            Pos2::new(group_left, cy - 15.0),
-            Pos2::new(group_right, cy + 15.0),
-        );
+        let group = Rect::from_min_max(Pos2::new(group_left, cy - 15.0), Pos2::new(group_right, cy + 15.0));
         self.timer_anchor = group;
         let timer = ui.interact(group, ui.id().with("read-aloud-timer"), Sense::click());
         if timer.hovered() || self.timer_open {
@@ -367,13 +361,8 @@ impl Listen {
             self.timer_open = false;
             return;
         }
-        let choices = [
-            Sleep::Minutes(15),
-            Sleep::Minutes(30),
-            Sleep::Minutes(45),
-            Sleep::Minutes(60),
-            Sleep::Off,
-        ];
+        let choices =
+            [Sleep::Minutes(15), Sleep::Minutes(30), Sleep::Minutes(45), Sleep::Minutes(60), Sleep::Off];
         let width = 236.0;
         let row = 32.0;
         let height = row * choices.len() as f32 + 34.0;
@@ -429,11 +418,7 @@ fn clock(seconds: f32) -> String {
     let total = seconds.max(0.0).round() as u32;
     let (hours, minutes, secs) = (total / 3600, (total % 3600) / 60, total % 60);
     // Minutes are padded too: a countdown whose width changes makes the things beside it jump.
-    if hours > 0 {
-        format!("{hours}:{minutes:02}:{secs:02}")
-    } else {
-        format!("{minutes:02}:{secs:02}")
-    }
+    if hours > 0 { format!("{hours}:{minutes:02}:{secs:02}") } else { format!("{minutes:02}:{secs:02}") }
 }
 
 fn sleep_label(sleep: Sleep) -> String {
@@ -443,11 +428,9 @@ fn sleep_label(sleep: Sleep) -> String {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
 
     #[test]
     fn the_clock_keeps_one_width_whatever_the_time() {
@@ -480,7 +463,4 @@ mod tests {
         let carried = ReadingState { chapter: Some(later), verse: Some(6), ..Default::default() };
         assert_eq!(listen.where_is(&carried), "Psalms 24:6");
     }
-
-
 }
-

@@ -45,10 +45,8 @@ fn main() {
     .unwrap_or(bible_core::speak::VOICES[0]);
     let mut builder = checkpoint.builder(Lang::En).device(DeviceKind::Cpu);
     for each in bible_core::speak::VOICES {
-        builder = builder.add_voice(
-            each.name,
-            dir.join(format!("{}.safetensors", each.name.to_ascii_lowercase())),
-        );
+        builder =
+            builder.add_voice(each.name, dir.join(format!("{}.safetensors", each.name.to_ascii_lowercase())));
     }
     let mut tts = builder.build().expect("voice");
     checkpoint.register_voices(&mut tts);
@@ -93,11 +91,7 @@ fn main() {
             found.iter().cloned().fold(0.0, f64::max),
         );
     }
-    let sample: String = said
-        .iter()
-        .find(|u| u.verse.is_some())
-        .map(|u| u.text.clone())
-        .unwrap_or_default();
+    let sample: String = said.iter().find(|u| u.verse.is_some()).map(|u| u.text.clone()).unwrap_or_default();
     if !sample.is_empty() {
         voices(&mut tts, rate, &sample);
     }

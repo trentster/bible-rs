@@ -26,6 +26,9 @@ required-features = ["speak"]
 
 [dependencies]
 bible-core.workspace = true
+# HTTPS and SHA-256: the Windows updater, and the one-time voice download every platform makes.
+sha2 = "0.10"
+ureq = { version = "3", default-features = false }
 anyhow.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -96,10 +99,6 @@ windows-sys = { version = "0.61", features = [
     "Win32_UI_Shell",
     "Win32_UI_WindowsAndMessaging",
 ] }
-# Updates: GitHub over HTTPS (the same ureq and rustls as bible-core), and the installer's SHA-256.
-sha2 = "0.10"
-ureq = { version = "3", default-features = false }
-
 [build-dependencies]
 serde_json.workspace = true
 # The Windows executable's icon, version information and manifest (packaging/windows).

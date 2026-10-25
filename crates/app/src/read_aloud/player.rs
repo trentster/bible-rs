@@ -4,8 +4,8 @@
 //! callback rather than being handed a buffer and forgotten. The mixing itself is a pure function,
 //! so pausing, stopping and finishing are tested without an audio device.
 
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 

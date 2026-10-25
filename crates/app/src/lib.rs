@@ -34,10 +34,10 @@ pub mod palette;
 pub mod panel;
 pub mod platform;
 pub mod probe;
-pub mod reader;
-pub mod reading;
 #[cfg(feature = "speak")]
 pub mod read_aloud;
+pub mod reader;
+pub mod reading;
 pub mod settings_ui;
 pub mod share_sheet;
 pub mod shortcuts_overlay;
