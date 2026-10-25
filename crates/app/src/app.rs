@@ -752,7 +752,7 @@ impl BibleApp {
             }
             Action::Listen => {
                 #[cfg(feature = "speak")]
-                self.toggle_listen(ctx);
+                self.toggle_listen();
                 #[cfg(not(feature = "speak"))]
                 let _ = ctx;
             }
@@ -1139,7 +1139,6 @@ impl BibleApp {
                 let (verse, left) = arg.split_once(',').unwrap_or((arg, "892"));
                 let verse: u8 = verse.trim().parse().unwrap_or(2);
                 let left: f32 = left.trim().parse().unwrap_or(892.0);
-                let now = ctx.input(|i| i.time);
                 let (c, _) = self.reader.location;
                 self.listen.show_preview(verse, left, c);
             }
@@ -1440,12 +1439,11 @@ impl BibleApp {
 
     /// Read aloud: the whole current chapter, from the top, in the voice chosen in Settings.
     #[cfg(feature = "speak")]
-    fn toggle_listen(&mut self, ctx: &egui::Context) {
+    fn toggle_listen(&mut self) {
         if self.listen.active() {
             self.listen.stop();
             return;
         }
-        let now = ctx.input(|i| i.time);
         let chapter =
             crate::read_aloud::chapter_to_read(self.reader.selection, self.reader.location.0);
         let Ok(text) = self.library.load(&self.settings.translation) else {

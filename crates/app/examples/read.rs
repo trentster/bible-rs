@@ -62,7 +62,24 @@ fn main() {
     } else {
         None
     };
-    let reading = bible_rs::read_aloud::Reading::start(session, voice, at, next);
+    // `READ_READY_PATH=1` does what the application does: open the reading paused, pick a timer while
+    // it is still waiting, then press play. Opening and arming in a different order is how a bug hid
+    // from the first test.
+    let reading = if std::env::var("READ_READY_PATH").is_ok() {
+        let reading = bible_rs::read_aloud::Reading::open(session, voice, at, next);
+        reading.choose(Sleep::Minutes(2));
+        reading.resume();
+        reading
+    } else {
+        let reading = bible_rs::read_aloud::Reading::start(session, voice, at, next);
+        if let Ok(seconds) = std::env::var("READ_SLEEP_SECONDS") {
+            if let Ok(seconds) = seconds.parse::<u64>() {
+                reading.arm_for(seconds);
+                println!("timer armed for {} s on the clock", seconds);
+            }
+        }
+        reading
+    };
     // The timer runs on the clock, so a short one proves the deadline ends the reading where it is.
     if let Ok(seconds) = std::env::var("READ_SLEEP_SECONDS") {
         if let Ok(seconds) = seconds.parse::<u64>() {
