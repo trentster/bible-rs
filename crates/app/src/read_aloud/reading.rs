@@ -289,11 +289,28 @@ fn make(
         if controls.stopped() {
             return;
         }
-        let next = {
+        // A session that has not been played yields nothing, and a paused one yields nothing either.
+        // Reading that as "the chapter is over" ended the reading before a word was said, which is
+        // exactly what a reading opened and not yet played looks like.
+        if controls.paused() {
+            std::thread::sleep(Duration::from_millis(40));
+            continue;
+        }
+        let (next, over) = {
             let Ok(mut guard) = session.lock() else { return };
-            guard.next()
+            match guard.next() {
+                Some(utterance) => (Some(utterance), false),
+                None => (None, guard.finished()),
+            }
         };
-        let Some(utterance) = next else { return };
+        let Some(utterance) = next else {
+            if over {
+                return;
+            }
+            // Paused between the check above and the question asked here: wait for play.
+            std::thread::sleep(Duration::from_millis(20));
+            continue;
+        };
         let spoken = match engine() {
             Ok(engine) => match engine.lock() {
                 Ok(mut engine) => engine.speak(&utterance.text, voice),
@@ -397,6 +414,28 @@ mod tests {
 
     fn deadline_at(at: Option<Instant>) -> Deadline {
         Arc::new(Mutex::new(at))
+    }
+
+    #[test]
+    fn pressing_play_on_an_opened_reading_speaks_rather_than_ending() {
+        // The one test that needs the voice model: without it there is nothing to speak and the
+        // failure it guards against cannot be told apart from a missing model.
+        if super::super::engine().is_err() {
+            return;
+        }
+        let verses = vec![(1, "For this Melchisedec, king of Salem.".to_string())];
+        let session = Session::new("Hebrews", 7, &verses, Sleep::Off);
+        let reading = Reading::open(session, Voice::by_name("Spencer").unwrap());
+        // Opening is not playing: nothing is said, and nothing is over.
+        std::thread::sleep(Duration::from_millis(150));
+        assert!(!reading.state().finished, "a reading nobody has played has not finished");
+        // Now press play, as the toolbar does. A reading that was abandoned while it waited for play
+        // ends instantly here instead of speaking.
+        reading.resume();
+        std::thread::sleep(Duration::from_millis(300));
+        let state = reading.state();
+        reading.stop();
+        assert!(!state.finished, "play on an opened reading ended it instead of speaking");
     }
 
     #[test]
