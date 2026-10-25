@@ -48,7 +48,7 @@ fn model_dir() -> Option<PathBuf> {
     candidates.into_iter().find(|dir| dir.join("model.q8.gguf").exists())
 }
 
-fn voice_path(dir: &PathBuf, voice: Voice) -> PathBuf {
+fn voice_path(dir: &std::path::Path, voice: Voice) -> PathBuf {
     dir.join(format!("{}.safetensors", voice.name.to_ascii_lowercase()))
 }
 

@@ -83,7 +83,7 @@ impl Session {
     }
 
     /// The next thing to say, or `None` once the chapter is finished.
-    pub fn next(&mut self) -> Option<Utterance> {
+    pub fn next_utterance(&mut self) -> Option<Utterance> {
         if !self.playing {
             return None;
         }

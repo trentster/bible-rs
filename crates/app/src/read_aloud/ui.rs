@@ -38,6 +38,12 @@ pub struct Listen {
     preview_left: Option<f32>,
 }
 
+impl Default for Listen {
+    fn default() -> Self {
+        Listen::new()
+    }
+}
+
 impl Listen {
     pub fn new() -> Listen {
         Listen {

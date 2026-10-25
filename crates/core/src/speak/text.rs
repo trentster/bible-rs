@@ -75,7 +75,9 @@ pub fn chapter(book: &str, number: u32, verses: &[(u32, String)]) -> Vec<Utteran
 /// Whether the sentence carries on into the next verse. A colon, semicolon or comma at the end of a
 /// verse is the text telling the narrator not to stop.
 pub(crate) fn runs_on(text: &str) -> bool {
-    let said = text.trim_end().trim_end_matches(|c| matches!(c, '"' | '\'' | '\u{201d}' | '\u{2019}' | ')' | ']'));
+    let said = text
+        .trim_end()
+        .trim_end_matches(['"', '\'', '\u{201d}', '\u{2019}', ')', ']']);
     said.ends_with(',') || said.ends_with(';') || said.ends_with(':')
 }
 
@@ -83,8 +85,7 @@ pub(crate) fn runs_on(text: &str) -> bool {
 /// read as words, and nothing a narrator would not say out loud.
 pub fn speakable(text: &str) -> String {
     let mut working = text
-        .replace('\u{2014}', ", ")
-        .replace('\u{2013}', ", ")
+        .replace(['\u{2014}', '\u{2013}'], ", ")
         .replace("&c.", "and so on")
         .replace("&c", "and so on")
         .replace("LORD", "Lord")
@@ -135,7 +136,7 @@ fn ordinal_words(value: u64) -> String {
     ];
     match value {
         0..=19 => ORDINALS[value as usize].to_string(),
-        20..=99 if value % 10 == 0 => TENS[(value / 10 - 2) as usize].to_string(),
+        20..=99 if value.is_multiple_of(10) => TENS[(value / 10 - 2) as usize].to_string(),
         20..=99 => format!("{}-{}", words(value / 10 * 10), ordinal_words(value % 10)),
         other => words(other),
     }

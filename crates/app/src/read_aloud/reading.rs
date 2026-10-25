@@ -56,6 +56,9 @@ pub struct Reading {
     /// What was left on the timer when the reader paused. A pause is a pause for the clock too, so
     /// the countdown waits on this and the deadline is put back when play comes.
     held: Arc<Mutex<Option<f32>>>,
+    /// The reader's choice from the timer menu, kept here rather than on a chapter's session: a reading
+    /// can walk into the next chapter, and the menu must not forget the timer on the way.
+    sleep: Mutex<Sleep>,
 }
 
 impl Reading {
@@ -76,7 +79,7 @@ impl Reading {
             let deadline = deadline.clone();
             std::thread::spawn(move || speak(session, controls, state, deadline, voice, at, next));
         }
-        Reading { controls, session, state, deadline, held }
+        Reading { controls, session, state, deadline, held, sleep: Mutex::new(Sleep::default()) }
     }
 
     /// Starts speaking `session` in `voice` on its own thread.
@@ -138,6 +141,9 @@ impl Reading {
     /// The reader's choice from the timer menu. Choosing one mid-reading starts it from now, which is
     /// what pressing a menu row means; choosing one before playing waits for play.
     pub fn choose(&self, sleep: Sleep) {
+        if let Ok(mut chosen) = self.sleep.lock() {
+            *chosen = sleep;
+        }
         if let Ok(mut session) = self.session.lock() {
             session.set_sleep(sleep);
         }
@@ -217,7 +223,7 @@ impl Reading {
     }
 
     pub fn sleep(&self) -> Sleep {
-        self.session.lock().map(|s| s.sleep()).unwrap_or_default()
+        self.sleep.lock().map(|chosen| *chosen).unwrap_or_default()
     }
 
     pub fn state(&self) -> ReadingState {
@@ -285,7 +291,8 @@ fn run(
 ) -> Result<(), String> {
     let (made, heard) = std::sync::mpsc::sync_channel::<Result<Heard, String>>(AHEAD);
     std::thread::scope(|scope| {
-        let maker = scope.spawn(move || make(session, controls, state, deadline, voice, at, next, made));
+        let making = Making { session, controls, state, deadline, voice, at, next };
+        let maker = scope.spawn(move || make(making, made));
         let played = play(controls, state, deadline, &heard);
         controls.stop();
         // Dropping the listening end is what unblocks a maker waiting to hand a piece over.
@@ -296,16 +303,19 @@ fn run(
 }
 
 /// Makes the pieces ahead of the reader's ears, so that playback never waits for the voice.
-fn make(
-    session: &Arc<Mutex<Session>>,
-    controls: &Arc<Controls>,
-    state: &Arc<Mutex<ReadingState>>,
-    deadline: &Deadline,
+/// What the making thread works from: the chapter, the reader's controls, and the way forward from it.
+struct Making<'a> {
+    session: &'a Arc<Mutex<Session>>,
+    controls: &'a Arc<Controls>,
+    state: &'a Arc<Mutex<ReadingState>>,
+    deadline: &'a Deadline,
     voice: Voice,
-    mut at: ChapterIdx,
-    next: Option<&NextChapter>,
-    out: std::sync::mpsc::SyncSender<Result<Heard, String>>,
-) {
+    at: ChapterIdx,
+    next: Option<&'a NextChapter>,
+}
+
+fn make(making: Making<'_>, out: std::sync::mpsc::SyncSender<Result<Heard, String>>) {
+    let Making { session, controls, state, deadline, voice, mut at, next } = making;
     loop {
         if controls.stopped() {
             return;
@@ -319,7 +329,7 @@ fn make(
         }
         let (next_utterance, over) = {
             let Ok(mut guard) = session.lock() else { return };
-            match guard.next() {
+            match guard.next_utterance() {
                 Some(utterance) => (Some(utterance), false),
                 None => (None, guard.finished()),
             }
@@ -499,5 +509,25 @@ mod tests {
         assert!(pcm[pcm.len() - 1].abs() < 0.01, "and ends in silence");
         let fade = (FADE_SECONDS * RATE as f32) as usize;
         assert!(pcm[pcm.len() - fade - 1] > 0.99, "the fade covers about a second");
+    }
+
+    #[test]
+    fn a_new_chapter_does_not_take_the_timer_with_it() {
+        let verses = vec![(1, "For this Melchisedec, king of Salem.".to_string())];
+        let session = Session::new("Hebrews", 7, &verses, Sleep::Off);
+        let reading =
+            Reading::open(session, Voice::by_name("Spencer").unwrap(), ChapterIdx::FIRST, None);
+        reading.choose(Sleep::Minutes(15));
+        assert_eq!(reading.sleep(), Sleep::Minutes(15));
+        // A roll-over swaps the chapter's session underneath the reading, and the replacement knows
+        // nothing of the reader's choice. The bar's menu reads the reading, not the chapter.
+        if let Ok(mut guard) = reading.session.lock() {
+            *guard = Session::new("Hebrews", 8, &verses, Sleep::Off);
+        }
+        assert_eq!(
+            reading.sleep(),
+            Sleep::Minutes(15),
+            "the reading walked into a new chapter and forgot the timer"
+        );
     }
 }

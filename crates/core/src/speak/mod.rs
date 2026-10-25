@@ -206,12 +206,12 @@ mod tests {
     fn a_session_reads_the_announcement_then_every_verse() {
         let verses = vec![(1, "For this Melchisedec".to_string()), (2, "To whom also".to_string())];
         let mut session = Session::new("Hebrews", 7, &verses, Sleep::Off);
-        assert!(session.next().is_none(), "nothing is said before it plays");
+        assert!(session.next_utterance().is_none(), "nothing is said before it plays");
         session.play();
-        assert_eq!(session.next().unwrap().text, "Hebrews, chapter seven");
-        assert_eq!(session.next().unwrap().verse, Some(1));
-        assert_eq!(session.next().unwrap().verse, Some(2));
-        assert!(session.next().is_none());
+        assert_eq!(session.next_utterance().unwrap().text, "Hebrews, chapter seven");
+        assert_eq!(session.next_utterance().unwrap().verse, Some(1));
+        assert_eq!(session.next_utterance().unwrap().verse, Some(2));
+        assert!(session.next_utterance().is_none());
         assert!(session.finished());
     }
 
@@ -220,9 +220,9 @@ mod tests {
         let verses = vec![(1, "one".to_string())];
         let mut session = Session::new("Psalms", 23, &verses, Sleep::Off);
         session.play();
-        session.next();
+        session.next_utterance();
         session.pause();
-        assert!(session.next().is_none());
+        assert!(session.next_utterance().is_none());
         assert_eq!(session.position(), 1, "one of the two utterances was handed out");
         assert!(!session.finished());
     }
@@ -233,7 +233,7 @@ mod tests {
         let mut session = Session::new("Psalms", 23, &verses, Sleep::Off);
         session.seek_to_verse(3);
         session.play();
-        assert_eq!(session.next().unwrap().verse, Some(3));
+        assert_eq!(session.next_utterance().unwrap().verse, Some(3));
     }
 
     #[test]
@@ -241,7 +241,7 @@ mod tests {
         let verses = vec![(1, "one".to_string())];
         let mut session = Session::new("Psalms", 23, &verses, Sleep::Minutes(15));
         session.play();
-        session.next();
+        session.next_utterance();
         session.stop();
         assert_eq!(session.position(), 0);
         assert!(!session.playing());
