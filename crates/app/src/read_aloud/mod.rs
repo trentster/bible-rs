@@ -49,7 +49,11 @@ fn model_dir() -> Option<PathBuf> {
     // An installed voice, fetched once on the reader's instruction. It lives beside the study
     // database, so a development copy and a real one never share a model.
     candidates.push(crate::data_dir().join("speech"));
-    candidates.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../data/speech"));
+    // A developer's copy, when the app is run from the build tree. Never in a release: a shipped
+    // app that found a stray folder on the machine would look set up when it is not.
+    if cfg!(debug_assertions) {
+        candidates.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../data/speech"));
+    }
     candidates.into_iter().find(|dir| dir.join("model.q8.gguf").exists())
 }
 

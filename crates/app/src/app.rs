@@ -752,7 +752,13 @@ impl BibleApp {
             }
             Action::Listen => {
                 #[cfg(feature = "speak")]
-                self.toggle_listen();
+                if crate::read_aloud::install::installed() {
+                    self.toggle_listen();
+                } else {
+                    // Nothing to speak with yet, so a bar with a play button would be a dead end.
+                    // The honest answer to "read this to me" is the page where the voice is fetched.
+                    self.apply_one(ctx, Action::OpenSettings(SettingsTab::ReadAloud));
+                }
                 #[cfg(not(feature = "speak"))]
                 let _ = ctx;
             }
