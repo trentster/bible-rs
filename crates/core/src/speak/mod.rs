@@ -6,13 +6,13 @@ mod text;
 mod voices;
 
 pub use session::{Session, Sleep};
-pub use silence::{cap_gaps, trim_silence, KEEP_TAIL_MS, LONGEST_GAP_MS};
+pub use silence::{KEEP_TAIL_MS, LONGEST_GAP_MS, cap_gaps, trim_silence};
 pub mod silence;
 pub use stretch::stretch;
 pub use text::{
-    chapter, speakable, words, Utterance, ANNOUNCE_PAUSE_MS, CLAUSE_PAUSE_MS, SENTENCE_PAUSE_MS,
+    ANNOUNCE_PAUSE_MS, CLAUSE_PAUSE_MS, SENTENCE_PAUSE_MS, Utterance, chapter, narration, speakable, words,
 };
-pub use voices::{Accent, Voice, SPEECH_WPM, VOICES};
+pub use voices::{Accent, SPEECH_WPM, VOICES, Voice};
 
 #[cfg(test)]
 mod tests {
@@ -50,7 +50,10 @@ mod tests {
 
     #[test]
     fn a_verse_number_that_slips_through_is_not_spoken() {
-        assert_eq!(speakable(" 1 For this Melchisedec, king of Salem"), "For this Melchisedec, king of Salem");
+        assert_eq!(
+            speakable(" 1 For this Melchisedec, king of Salem"),
+            "For this Melchisedec, king of Salem"
+        );
     }
 
     #[test]
@@ -107,10 +110,7 @@ mod tests {
                     }
                 }
             }
-            println!(
-                "{id}: {run_on}/{total} verses run on = {:.1}%",
-                100.0 * run_on as f32 / total as f32
-            );
+            println!("{id}: {run_on}/{total} verses run on = {:.1}%", 100.0 * run_on as f32 / total as f32);
             if id == "kjv" {
                 let mut chains: Vec<(usize, usize)> = Vec::new(); // (verses, words)
                 for book in BookId::all() {
@@ -126,7 +126,9 @@ mod tests {
                                 nw = 0;
                             }
                         }
-                        if nv > 0 { chains.push((nv, nw)); }
+                        if nv > 0 {
+                            chains.push((nv, nw));
+                        }
                     }
                 }
                 let over3 = chains.iter().filter(|c| c.0 > 3).count();
@@ -152,7 +154,11 @@ mod tests {
     #[test]
     fn a_sentence_that_crosses_a_verse_number_is_read_straight_through() {
         let verses = vec![
-            (12, "Now when Jesus had heard that John was cast into prison, he departed into Galilee;".to_string()),
+            (
+                12,
+                "Now when Jesus had heard that John was cast into prison, he departed into Galilee;"
+                    .to_string(),
+            ),
             (13, "And leaving Nazareth, he came and dwelt in Capernaum.".to_string()),
         ];
         let script = chapter("Matthew", 4, &verses);
@@ -182,7 +188,12 @@ mod tests {
     #[test]
     fn a_sentence_too_long_to_hold_is_broken_with_a_clause_breath() {
         let verse = |n: u8| (n, format!("clause number {n} carries on;"));
-        let verses: Vec<(u32, String)> = (1..=5u8).map(|n| { let (n, t) = verse(n); (n as u32, t) }).collect();
+        let verses: Vec<(u32, String)> = (1..=5u8)
+            .map(|n| {
+                let (n, t) = verse(n);
+                (n as u32, t)
+            })
+            .collect();
         let script = chapter("Hebrews", 7, &verses);
         assert_eq!(script.len(), 3, "the announcement, three verses, then the last two");
         assert_eq!(script[1].verse, Some(1));
@@ -193,10 +204,7 @@ mod tests {
 
     #[test]
     fn a_closing_quote_does_not_hide_the_colon() {
-        let verses = vec![
-            (1, "\u{201c}He said unto them:".to_string()),
-            (2, "Follow me.".to_string()),
-        ];
+        let verses = vec![(1, "\u{201c}He said unto them:".to_string()), (2, "Follow me.".to_string())];
         let script = chapter("Matthew", 4, &verses);
         assert_eq!(script.len(), 2);
         assert_eq!(script[1].verse, Some(1));
@@ -265,5 +273,37 @@ mod tests {
         assert_eq!(Voice::for_locale("de_DE").name, "Spencer");
         assert_eq!(Voice::by_name("harper").map(|v| v.female), Some(true));
         assert_eq!(Voice::by_name("nobody"), None);
+    }
+
+    #[test]
+    fn ye_is_said_yee_not_yay() {
+        assert_eq!(narration("ye shall abide"), "yee shall abide");
+        assert_eq!(narration("Ye are the salt"), "Yee are the salt");
+    }
+
+    #[test]
+    fn words_that_merely_contain_ye_are_left_alone() {
+        for word in ["yes", "eyes", "dye", "yearn", "obeyed"] {
+            assert_eq!(narration(word), word, "{word} must survive untouched");
+        }
+    }
+
+    #[test]
+    fn the_old_words_are_spelt_as_they_are_said() {
+        assert_eq!(narration("thus saith the Lord"), "thus seth the Lord");
+        assert_eq!(narration("he doth and thou dost"), "he duth and thou dust");
+        assert_eq!(narration("the shewbread"), "the showbread");
+        assert_eq!(narration("she shewed them"), "she showed them");
+    }
+
+    #[test]
+    fn yea_still_rhymes_with_yay() {
+        assert_eq!(narration("yea, hath he said"), "yea, hath he said");
+    }
+
+    #[test]
+    fn the_punctuation_and_the_apostrophes_are_kept() {
+        assert_eq!(narration("ye, and ye."), "yee, and yee.");
+        assert_eq!(narration("O ye of little faith"), "O yee of little faith");
     }
 }

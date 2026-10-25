@@ -43,7 +43,7 @@ pub fn chapter(book: &str, number: u32, verses: &[(u32, String)]) -> Vec<Utteran
     let mut started_at: Option<u8> = None;
     let mut carried = 0usize;
     for (number, text) in verses {
-        let spoken = speakable(text);
+        let spoken = narration(text);
         if spoken.is_empty() {
             continue;
         }
@@ -54,8 +54,8 @@ pub fn chapter(book: &str, number: u32, verses: &[(u32, String)]) -> Vec<Utteran
         started_at = started_at.or(Some(*number as u8));
         carried += 1;
         let running_on = runs_on(&sentence);
-        let too_long = carried >= MAX_SENTENCE_VERSES
-            || sentence.split_whitespace().count() >= MAX_SENTENCE_WORDS;
+        let too_long =
+            carried >= MAX_SENTENCE_VERSES || sentence.split_whitespace().count() >= MAX_SENTENCE_WORDS;
         if !running_on || too_long {
             said.push(Utterance {
                 text: std::mem::take(&mut sentence),
@@ -75,10 +75,61 @@ pub fn chapter(book: &str, number: u32, verses: &[(u32, String)]) -> Vec<Utteran
 /// Whether the sentence carries on into the next verse. A colon, semicolon or comma at the end of a
 /// verse is the text telling the narrator not to stop.
 pub(crate) fn runs_on(text: &str) -> bool {
-    let said = text
-        .trim_end()
-        .trim_end_matches(['"', '\'', '\u{201d}', '\u{2019}', ')', ']']);
+    let said = text.trim_end().trim_end_matches(['"', '\'', '\u{201d}', '\u{2019}', ')', ']']);
     said.ends_with(',') || said.ends_with(';') || said.ends_with(':')
+}
+
+/// Words the narrator gets wrong, and how to spell them so it says them right. Only the spoken copy
+/// is touched: the page keeps its own spelling, and the reader never sees "yee".
+///
+/// Counted across the whole KJV: "ye" appears 3,985 times, "saith" 1,262, "shew" and its forms 381,
+/// "doth" 206, "dost" 56. "yea" is left alone because it really is said "yay".
+const SAY_AS: &[(&str, &str)] = &[
+    ("ye", "yee"),
+    ("saith", "seth"),
+    ("doth", "duth"),
+    ("dost", "dust"),
+    ("shew", "show"),
+    ("shewed", "showed"),
+    ("sheweth", "showeth"),
+    ("shewbread", "showbread"),
+];
+
+/// Respells the words in [`SAY_AS`], leaving everything else — punctuation, capitals, apostrophes —
+/// exactly as it was.
+fn respoken(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut word = String::new();
+    let mut flush = |out: &mut String, word: &mut String| {
+        if word.is_empty() {
+            return;
+        }
+        let lower = word.to_lowercase();
+        match SAY_AS.iter().find(|(as_written, _)| *as_written == lower) {
+            Some((_, say)) => {
+                let mut spelt = say.chars();
+                match spelt.next() {
+                    Some(first) if word.starts_with(|c: char| c.is_uppercase()) => {
+                        out.push(first.to_uppercase().next().unwrap_or(first));
+                        out.push_str(spelt.as_str());
+                    }
+                    _ => out.push_str(say),
+                }
+            }
+            None => out.push_str(word),
+        }
+        word.clear();
+    };
+    for ch in text.chars() {
+        if ch.is_alphabetic() || ch == '\'' {
+            word.push(ch);
+        } else {
+            flush(&mut out, &mut word);
+            out.push(ch);
+        }
+    }
+    flush(&mut out, &mut word);
+    out
 }
 
 /// One verse, ready to be spoken: divine names in normal case, dashes turned into pauses, digits
@@ -105,6 +156,11 @@ pub fn speakable(text: &str) -> String {
     said
 }
 
+/// What the narrator is actually given: [`speakable`], then the words it would get wrong respelled.
+pub fn narration(text: &str) -> String {
+    respoken(&speakable(text))
+}
+
 /// A token that is only a number, or a number with punctuation attached, said as words.
 fn spoken_number(token: &str) -> Option<String> {
     let head: String = token.chars().take_while(|c| c.is_ascii_digit()).collect();
@@ -126,12 +182,35 @@ fn spoken_number(token: &str) -> Option<String> {
 /// Ordinals, for the rare "23rd" that turns up in a reference rather than a verse.
 fn ordinal_words(value: u64) -> String {
     const ORDINALS: [&str; 20] = [
-        "zeroth", "first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth",
-        "ninth", "tenth", "eleventh", "twelfth", "thirteenth", "fourteenth", "fifteenth",
-        "sixteenth", "seventeenth", "eighteenth", "nineteenth",
+        "zeroth",
+        "first",
+        "second",
+        "third",
+        "fourth",
+        "fifth",
+        "sixth",
+        "seventh",
+        "eighth",
+        "ninth",
+        "tenth",
+        "eleventh",
+        "twelfth",
+        "thirteenth",
+        "fourteenth",
+        "fifteenth",
+        "sixteenth",
+        "seventeenth",
+        "eighteenth",
+        "nineteenth",
     ];
     const TENS: [&str; 8] = [
-        "twentieth", "thirtieth", "fortieth", "fiftieth", "sixtieth", "seventieth", "eightieth",
+        "twentieth",
+        "thirtieth",
+        "fortieth",
+        "fiftieth",
+        "sixtieth",
+        "seventieth",
+        "eightieth",
         "ninetieth",
     ];
     match value {
@@ -145,12 +224,28 @@ fn ordinal_words(value: u64) -> String {
 /// Integer to English words, which is all a chapter or verse number ever needs.
 pub fn words(value: u64) -> String {
     const UNITS: [&str; 20] = [
-        "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
-        "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen",
+        "zero",
+        "one",
+        "two",
+        "three",
+        "four",
+        "five",
+        "six",
+        "seven",
+        "eight",
+        "nine",
+        "ten",
+        "eleven",
+        "twelve",
+        "thirteen",
+        "fourteen",
+        "fifteen",
+        "sixteen",
+        "seventeen",
+        "eighteen",
         "nineteen",
     ];
-    const TENS: [&str; 8] =
-        ["twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
+    const TENS: [&str; 8] = ["twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
     match value {
         0..=19 => UNITS[value as usize].to_string(),
         20..=99 => {

@@ -18,13 +18,8 @@ pub enum Sleep {
 
 impl Sleep {
     /// The choices the menu offers, in the order it shows them.
-    pub const CHOICES: [Sleep; 5] = [
-        Sleep::Minutes(15),
-        Sleep::Minutes(30),
-        Sleep::Minutes(45),
-        Sleep::Minutes(60),
-        Sleep::Off,
-    ];
+    pub const CHOICES: [Sleep; 5] =
+        [Sleep::Minutes(15), Sleep::Minutes(30), Sleep::Minutes(45), Sleep::Minutes(60), Sleep::Off];
 
     pub fn label(self) -> String {
         match self {

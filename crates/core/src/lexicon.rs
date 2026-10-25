@@ -206,12 +206,8 @@ mod bundled {
     /// 13 MB of dictionary costs nothing on the way to a first painted frame.
     macro_rules! lex {
         ($id:literal) => {
-            include_bytes!(concat!(
-                env!("CARGO_MANIFEST_DIR"),
-                "/../../data/lexicon/",
-                $id,
-                ".tsv.zst"
-            )) as &[u8]
+            include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../data/lexicon/", $id, ".tsv.zst"))
+                as &[u8]
         };
     }
 
@@ -220,10 +216,8 @@ mod bundled {
     static FORMS: &[u8] = lex!("wordnet-forms");
     /// Hand-edited source data, a couple of kilobytes: kept as text so an edit can never leave a
     /// stale compressed copy behind for the app to use.
-    static ALIASES: &str = include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../data/lexicon/aliases.tsv"
-    ));
+    static ALIASES: &str =
+        include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../data/lexicon/aliases.tsv"));
 
     /// One compressed table, unpacked to text. A table that will not unpack leaves the dictionary
     /// empty and says so, rather than taking the app down in front of a reader.
@@ -378,11 +372,7 @@ mod bundled {
         }
         let lemma = forms().get(&super::normalize(word))?;
         let found = wordnet().lookup(lemma);
-        if found.is_empty() {
-            None
-        } else {
-            Some(found)
-        }
+        if found.is_empty() { None } else { Some(found) }
     }
 
     /// Each entry cut to its first two sentences.
@@ -411,7 +401,7 @@ mod bundled {
 }
 
 #[cfg(feature = "bundled")]
-pub use bundled::{aliases, define, headwords, warm, Alias, Definition};
+pub use bundled::{Alias, Definition, aliases, define, headwords, warm};
 
 #[cfg(feature = "bundled")]
 #[test]

@@ -101,10 +101,7 @@ mod tests {
     /// Within a block of the mark: the trimmer judges loudness in blocks, not samples.
     fn near(actual: usize, expected: usize) {
         let slack = ms(BLOCK_MS) + ms(BLOCK_MS);
-        assert!(
-            actual.abs_diff(expected) <= slack,
-            "trimmed to {actual} samples, expected about {expected}"
-        );
+        assert!(actual.abs_diff(expected) <= slack, "trimmed to {actual} samples, expected about {expected}");
     }
 
     #[test]

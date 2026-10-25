@@ -232,9 +232,8 @@ impl OnlineTranslation {
         };
         // A thread that cannot start (an exhausted process) leaves no worker at all: record why,
         // rather than panicking, so [chapter] can say so.
-        if let Err(e) = std::thread::Builder::new()
-            .name(format!("fetch-{}", config.id))
-            .spawn(move || worker.run(rx))
+        if let Err(e) =
+            std::thread::Builder::new().name(format!("fetch-{}", config.id)).spawn(move || worker.run(rx))
         {
             shared.lock_or_recover().dead = Some(format!("couldn't start the fetch worker: {e}"));
         }

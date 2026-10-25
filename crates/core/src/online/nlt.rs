@@ -15,8 +15,8 @@ use anyhow::Result;
 use super::{BookShare, CachePolicy, DailyBudget, FetchedChapter, Source, http_agent, read_body};
 use crate::books::{BookId, ChapterIdx};
 use crate::model::{TranslationBuilder, TranslationMeta};
-use crate::sync::LockExt;
 pub use crate::nlt_html::{COPYRIGHT, parse_html, parse_into};
+use crate::sync::LockExt;
 
 pub const DEFAULT_BASE: &str = "https://api.nlt.to";
 

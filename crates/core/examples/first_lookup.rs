@@ -35,6 +35,10 @@ fn main() {
     println!("first lookup, WordNet table (unpack + index + find)  {}", ms(wordnet_first));
     println!("first lookup, Easton's table (unpack + index + find)  {}", ms(easton_first));
     println!("warm lookup, fastest of 300                              {:?}", warm);
-    println!("feast answered with {} entry, {} line(s) of meaning", found.entries.len(), found.entries.first().map_or(0, |e| e.body.lines().count()));
+    println!(
+        "feast answered with {} entry, {} line(s) of meaning",
+        found.entries.len(),
+        found.entries.first().map_or(0, |e| e.body.lines().count())
+    );
     println!("Melchisedec answered with {} entry", name.entries.len());
 }
