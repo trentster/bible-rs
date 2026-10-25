@@ -31,7 +31,9 @@ fn main() {
         .filter(|v| v.number as u32 <= last)
         .map(|v| (v.number as u32, v.text.to_string()))
         .collect();
-    let said = bible_core::speak::chapter("Matthew", 4, &verses);
+    // The announcement must name the chapter actually being read — hardcoding it once made a render
+    // of Matthew 15 announce "Matthew, chapter four".
+    let said = bible_core::speak::chapter(chapter.book().name(), chapter.chapter() as u32, &verses);
 
     let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../data/speech");
     let checkpoint =
@@ -75,7 +77,7 @@ fn main() {
     }
 
     for (name, stream) in [("before", &before), ("after", &after)] {
-        let path = format!("/tmp/matthew4-{name}.wav");
+        let path = format!("/tmp/{}-{}-{name}.wav", code.to_lowercase(), number.trim());
         write_wav(&path, stream, rate);
         let found = gaps(stream, rate);
         println!(
