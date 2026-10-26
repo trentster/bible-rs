@@ -745,6 +745,10 @@ impl BibleApp {
                     self.settings.parallel.retain(|p| *p != id);
                     self.library.warm(&[id]);
                     self.sidebar.invalidate_search();
+                    // A reading is of the text it started in: change translation and it stops,
+                    // rather than going on in your ears in the version you just left.
+                    #[cfg(feature = "speak")]
+                    self.listen.stop();
                 }
             }
             Action::TranslationNumber(n) => {
