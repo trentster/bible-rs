@@ -11,6 +11,9 @@ pub struct Utterance {
     pub pause_ms: u32,
     /// The verse this belongs to, so a session can say where it is; `None` for an announcement.
     pub verse: Option<u8>,
+    /// The last verse the sentence covers: a sentence runs on past a verse number, so one utterance
+    /// can span several. `None` for an announcement.
+    pub until: Option<u8>,
 }
 
 /// A breath where a sentence ends. Chosen against the audio, not against the model: the voice's own
@@ -34,6 +37,7 @@ pub fn chapter(book: &str, number: u32, verses: &[(u32, String)]) -> Vec<Utteran
         text: format!("{}, chapter {}", book, words(number as u64)),
         pause_ms: ANNOUNCE_PAUSE_MS,
         verse: None,
+        until: None,
     });
     // Verses are not sentences. The KJV ends a verse with a semicolon or a colon wherever the
     // sentence carries on across the verse number, and a narrator who pauses at that number reads
@@ -62,12 +66,18 @@ pub fn chapter(book: &str, number: u32, verses: &[(u32, String)]) -> Vec<Utteran
                 // A sentence cut short of its end gets a clause breath, not a full stop.
                 pause_ms: if running_on { CLAUSE_PAUSE_MS } else { SENTENCE_PAUSE_MS },
                 verse: started_at.take(),
+                until: Some(*number as u8),
             });
             carried = 0;
         }
     }
     if !sentence.is_empty() {
-        said.push(Utterance { text: sentence, pause_ms: SENTENCE_PAUSE_MS, verse: started_at });
+        said.push(Utterance {
+            text: sentence,
+            pause_ms: SENTENCE_PAUSE_MS,
+            verse: started_at,
+            until: verses.last().map(|(number, _)| *number as u8),
+        });
     }
     said
 }
@@ -102,7 +112,7 @@ const SAY_AS: &[(&str, &str)] = &[
 fn respoken(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut word = String::new();
-    let mut flush = |out: &mut String, word: &mut String| {
+    let flush = |out: &mut String, word: &mut String| {
         if word.is_empty() {
             return;
         }

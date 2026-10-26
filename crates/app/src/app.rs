@@ -47,6 +47,10 @@ pub struct Settings {
     pub sidebar_attached: bool,
     pub highlight_names: Vec<String>,
     pub reduce_motion: bool,
+    /// Read aloud: tint the sentence being spoken, for following along. Off for readers who find
+    /// anything moving on the page distracting.
+    #[serde(default = "yes")]
+    pub speak_tint: bool,
     pub flash_jumps: bool,
     /// Data: what exports include (highlights, notes, bookmarks, history), and automatic
     /// backups (on, and weekly rather than daily).
@@ -94,6 +98,7 @@ impl Default for Settings {
             sidebar_attached: false,
             highlight_names: Vec::new(),
             reduce_motion: false,
+            speak_tint: true,
             flash_jumps: true,
             shortcuts: Default::default(),
             export_include: [true, true, true, false],
@@ -1138,11 +1143,13 @@ impl BibleApp {
             // being read. The seconds let a shot show any point in the countdown.
             #[cfg(feature = "speak")]
             "listen" => {
-                let (verse, left) = arg.split_once(',').unwrap_or((arg, "892"));
-                let verse: u8 = verse.trim().parse().unwrap_or(2);
-                let left: f32 = left.trim().parse().unwrap_or(892.0);
+                let mut parts = arg.split(',');
+                let verse: u8 = parts.next().unwrap_or("2").trim().parse().unwrap_or(2);
+                let left: f32 = parts.next().unwrap_or("892").trim().parse().unwrap_or(892.0);
+                // `listen:<verse>,<seconds>,<last verse of the sentence>` tints a sentence that runs on.
+                let until: u8 = parts.next().and_then(|u| u.trim().parse().ok()).unwrap_or(verse);
                 let (c, _) = self.reader.location;
-                self.listen.show_preview(verse, left, c);
+                self.listen.show_preview_span(verse, until, left, c);
             }
             // `wait`: hold a frame, so a later step sees the page settled.
             "wait" => {}
@@ -2738,6 +2745,20 @@ impl eframe::App for BibleApp {
                 online_generation: &self.online_gen,
                 toolbar: top,
                 resizing: self.sidebar_motion.moving(),
+                // Read aloud's read-along tint: the sentence under the voice, unless the reader has
+                // turned it off in Settings.
+                spoken: if self.settings.speak_tint {
+                    #[cfg(feature = "speak")]
+                    {
+                        self.listen.speaking_span()
+                    }
+                    #[cfg(not(feature = "speak"))]
+                    {
+                        None
+                    }
+                } else {
+                    None
+                },
             };
             let mut reader_ui = ui.new_child(egui::UiBuilder::new().max_rect(reader_rect));
             if let (Some(state), Some(retrying)) = (&self.offline, offline) {

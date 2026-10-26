@@ -44,6 +44,14 @@ impl Default for Listen {
     }
 }
 
+/// The verses a piece of speech covers: a sentence runs on past a verse number, so one utterance can
+/// span several and the page tints all of them.
+pub fn spoken_span(state: &ReadingState, at: ChapterIdx) -> Option<(VerseRef, VerseRef)> {
+    let first = state.verse?;
+    let last = state.until.unwrap_or(first).max(first);
+    Some((VerseRef::new(at.book(), at.chapter(), first), VerseRef::new(at.book(), at.chapter(), last)))
+}
+
 impl Listen {
     pub fn new() -> Listen {
         Listen {
@@ -86,8 +94,18 @@ impl Listen {
 
     /// Paints the bar without speaking, for the screenshot harness.
     pub fn show_preview(&mut self, verse: u8, left: f32, at: ChapterIdx) {
+        self.show_preview_span(verse, verse, left, at);
+    }
+
+    /// A preview of a sentence that runs on past its verse number, for shots of the read-along tint.
+    pub fn show_preview_span(&mut self, verse: u8, until: u8, left: f32, at: ChapterIdx) {
         self.at = at;
-        self.preview = Some(ReadingState { verse: Some(verse), speaking: true, ..Default::default() });
+        self.preview = Some(ReadingState {
+            verse: Some(verse),
+            until: Some(until),
+            speaking: true,
+            ..Default::default()
+        });
         self.preview_left = Some(left);
     }
 
@@ -136,6 +154,16 @@ impl Listen {
         let verse = state.verse?;
         let at = self.chapter_of(&state);
         Some(VerseRef::new(at.book(), at.chapter(), verse))
+    }
+
+    /// The sentence being spoken, as the verses it covers: what the page tints while it is read.
+    /// `None` when nothing is sounding, or when the reader has turned the tint off.
+    pub fn speaking_span(&self) -> Option<(VerseRef, VerseRef)> {
+        let state = self.state();
+        if !state.speaking {
+            return None;
+        }
+        spoken_span(&state, self.chapter_of(&state))
     }
 
     pub fn sleep(&self) -> Sleep {
@@ -462,5 +490,21 @@ mod tests {
         let later = ChapterIdx::new(psalm, 24).unwrap();
         let carried = ReadingState { chapter: Some(later), verse: Some(6), ..Default::default() };
         assert_eq!(listen.where_is(&carried), "Psalms 24:6");
+    }
+
+    #[test]
+    fn the_tint_covers_every_verse_the_sentence_runs_through() {
+        let at = ChapterIdx::new(bible_core::books::BookId::PSALMS, 23).unwrap();
+        // A sentence that runs on past a verse number covers both verses.
+        let across = ReadingState { verse: Some(1), until: Some(2), speaking: true, ..Default::default() };
+        let (first, last) = spoken_span(&across, at).unwrap();
+        assert_eq!((first.verse, last.verse), (1, 2));
+        // A sentence that ends where it began covers one verse.
+        let one = ReadingState { verse: Some(4), until: Some(4), speaking: true, ..Default::default() };
+        let (first, last) = spoken_span(&one, at).unwrap();
+        assert_eq!((first.verse, last.verse), (4, 4));
+        // An announcement has no verse, so there is nothing to tint.
+        let announcing = ReadingState { verse: None, speaking: true, ..Default::default() };
+        assert!(spoken_span(&announcing, at).is_none());
     }
 }

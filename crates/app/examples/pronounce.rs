@@ -30,11 +30,11 @@ fn main() {
     let web = counts("web");
     // Ordinary English that needs no help; the point is to catch the rest.
     let common = [
-        "the", "and", "of", "to", "that", "in", "he", "shall", "unto", "for", "i", "his", "a",
-        "they", "be", "him", "not", "them", "it", "with", "all", "thou", "thy", "thee", "ye", "as",
-        "was", "their", "which", "but", "is", "me", "my", "when", "this", "are", "so", "out", "up",
-        "into", "have", "will", "from", "by", "her", "she", "we", "your", "us", "who", "upon", "at",
-        "there", "then", "if", "now", "also", "or", "one", "no", "may", "than", "were", "an", "did",
+        "the", "and", "of", "to", "that", "in", "he", "shall", "unto", "for", "i", "his", "a", "they", "be",
+        "him", "not", "them", "it", "with", "all", "thou", "thy", "thee", "ye", "as", "was", "their",
+        "which", "but", "is", "me", "my", "when", "this", "are", "so", "out", "up", "into", "have", "will",
+        "from", "by", "her", "she", "we", "your", "us", "who", "upon", "at", "there", "then", "if", "now",
+        "also", "or", "one", "no", "may", "than", "were", "an", "did",
     ];
     let mut archaic: Vec<(&String, &u64)> = kjv
         .iter()
@@ -62,10 +62,7 @@ fn main() {
         for verse in text.verses_in(chapter) {
             let mut after_stop = true;
             for raw in verse.text.split_whitespace() {
-                let word: String = raw
-                    .chars()
-                    .filter(|c| c.is_alphabetic() || *c == '\'')
-                    .collect();
+                let word: String = raw.chars().filter(|c| c.is_alphabetic() || *c == '\'').collect();
                 let opens = after_stop;
                 after_stop = raw.ends_with(['.', '!', '?', ':', ';', ',']);
                 if word.is_empty() {

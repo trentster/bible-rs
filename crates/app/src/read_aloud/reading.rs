@@ -29,6 +29,9 @@ pub struct ReadingState {
     /// The chapter being heard, which is not always the chapter the bar was opened on.
     pub chapter: Option<ChapterIdx>,
     pub verse: Option<u8>,
+    /// The last verse of the sentence being spoken: a sentence runs on past a verse number, so the
+    /// page tints all of it rather than one verse at a time.
+    pub until: Option<u8>,
     pub speaking: bool,
     pub finished: bool,
     /// Something the reader should know, such as a voice that would not start.
@@ -273,6 +276,7 @@ struct Heard {
     pcm: Arc<Vec<f32>>,
     chapter: ChapterIdx,
     verse: Option<u8>,
+    until: Option<u8>,
     breath: usize,
 }
 
@@ -365,6 +369,7 @@ fn make(making: Making<'_>, out: std::sync::mpsc::SyncSender<Result<Heard, Strin
             pcm,
             chapter: at,
             verse: utterance.verse,
+            until: utterance.until,
             // The breath rides along, so pause and stop apply to it too.
             breath: (utterance.pause_ms as u64 * RATE as u64 / 1000) as usize,
         });
@@ -435,6 +440,7 @@ fn play_piece(
     if let Ok(mut state) = state.lock() {
         state.chapter = Some(piece.chapter);
         state.verse = piece.verse;
+        state.until = piece.until;
         state.speaking = true;
     }
     player::play(&pcm, RATE, controls)?;

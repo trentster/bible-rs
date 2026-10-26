@@ -1701,6 +1701,20 @@ fn read_aloud(ui: &mut Ui, settings: &mut Settings) {
         voice_setup(ui, p);
         return;
     }
+    // Read along: tint the sentence under the voice. Some readers find anything moving on the page
+    // distracting, so it can be turned off without giving up the reading.
+    let rows = vec![52.0];
+    rows_card(ui, p, &rows, |ui, _, r| {
+        row_label(ui, p, r, "Highlight the sentence being read", Some("Follows the voice"));
+        widgets::toggle(
+            ui,
+            p,
+            pos2(r.right() - 30.0, r.center().y),
+            ui.id().with("speak-tint"),
+            &mut settings.speak_tint,
+        );
+    });
+    ui.add_space(12.0);
     let voices = bible_core::speak::VOICES;
     let current = settings.voice().name;
     let mut chosen: Option<&'static str> = None;

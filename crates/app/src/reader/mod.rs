@@ -47,6 +47,8 @@ pub struct Env<'a> {
     pub online_generation: &'a AtomicU64,
     /// Height of the toolbar floating over the reader's top edge.
     pub toolbar: f32,
+    /// The verses the narrator is on right now, for the read-along tint under the voice.
+    pub spoken: Option<(VerseRef, VerseRef)>,
     /// The reader's width is changing frame by frame (the sidebar sliding): typeset only what is
     /// on screen, not the neighbouring chapters, which would be laid out again next frame.
     pub resizing: bool,
@@ -727,6 +729,23 @@ impl Reader {
                         .collect()
                 };
                 let radius = CornerRadius::same(4);
+                // Read aloud: the sentence under the voice, as a quiet wash behind its lines. Each
+                // visual line is its own block, so the band spans the column and the blocks stack
+                // to read as one continuous band, without per-line pills. Painted before the verse
+                // loop, so the reader's own highlights, the selection and note marks sit on top.
+                if let Some((first, last)) = env.spoken
+                    && block.verses.iter().any(|(_, _, number)| {
+                        let v = VerseRef::new(ch.book(), ch.chapter(), *number);
+                        first <= v && v <= last
+                    })
+                {
+                    let x = geom.x0 + block.column as f32 * (geom.col_w + geom.gutter);
+                    let band = Rect::from_min_max(
+                        pos2(x - 10.0, bo.y - 1.0),
+                        pos2(x + geom.col_w + 10.0, bo.y + block.rect().height() + 1.0),
+                    );
+                    painter.rect_filled(band, CornerRadius::same(0), p.accent_soft.gamma_multiply(0.6));
+                }
                 for (k, (start, vi, number)) in block.verses.iter().enumerate() {
                     let end = block.verses.get(k + 1).map_or(usize::MAX, |(s, _, _)| *s);
                     let end = end.min(block.galley.job.text.chars().count());
