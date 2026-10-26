@@ -558,7 +558,7 @@ dependencies = [
 
 [[package]]
 name = "bible-core"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "criterion",
@@ -577,7 +577,7 @@ dependencies = [
 
 [[package]]
 name = "bible-ffi"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "bible-core",
@@ -588,7 +588,7 @@ dependencies = [
 
 [[package]]
 name = "bible-rs"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "bible-core",
@@ -618,7 +618,7 @@ dependencies = [
 
 [[package]]
 name = "bible-web"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "bible-core",
@@ -6801,7 +6801,7 @@ dependencies = [
 
 [[package]]
 name = "xtask"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "bible-core",
