@@ -22,6 +22,31 @@ typeset, searchable as you type, with highlights, notes and bookmarks kept on yo
 - **Yours.** Highlights, notes and bookmarks live in a local SQLite file and export to JSON or
   Markdown. No accounts, no feeds, no network unless you add an online translation.
 
+## What this fork adds
+
+Beyond upstream: **study tools and a voice**, all of them offline.
+
+- **Look up any word** — right-click → *Look Up* (⌃⌘D). Definitions come from dictionaries bundled in
+  the app; nothing is fetched, nothing is logged.
+- **Read Aloud** — the chapter read in a natural voice, entirely on your Mac. Four narrators (two
+  accents, both genders), chosen by ear in Settings, read at a measured pace. No account, no
+  network, and no Apple system voice. The playback bar stays put while a chapter is read, pause is
+  one press away, and the sleep timer **keeps reading into the next chapter** rather than stopping
+  when the current one ends — a 15-minute timer on a 4-minute chapter means 15 minutes.
+- **Read-along** — while it speaks, the sentence being read is tinted on the page so your eye can
+  follow, with a switch in Settings for readers who find it distracting. The voice also follows the
+  page: navigate to another chapter and the reading stops rather than talking over what you're
+  looking at.
+- **The voice arrives when you ask for it** — 62 MB of [Phonon-31m](https://huggingface.co/gradium/phonon-31m-en)
+  (Apache-2.0) downloads once from this repository's
+  [`speech-1` release](https://github.com/trentster/bible-rs/releases/tag/speech-1), each file checked
+  against a pinned SHA-256 before it is written. It is the only network path Read Aloud has.
+- **Words are said as they should be** — a small pronunciation table fixes what a spelling-driven
+  voice gets wrong ("ye" said as *yee*, "saith" as *seth*, "Bezaleel" as *bez-a-lail*), applied to
+  the spoken copy only; the page keeps its own spelling.
+
+Download the latest build from [Releases](https://github.com/trentster/bible-rs/releases).
+
 <table>
 <tr>
 <td><img src="docs/screenshots/psalm-sepia.png" alt="Psalm 23 in the Berean Standard Bible, sepia theme"></td>
