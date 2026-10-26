@@ -181,7 +181,16 @@ impl Listen {
     }
 
     pub fn sleep(&self) -> Sleep {
-        self.reading.as_ref().map(|r| r.sleep()).unwrap_or_default()
+        if let Some(reading) = self.reading.as_ref() {
+            return reading.sleep();
+        }
+        // A preview with seconds left on it is a preview of a timed reading, and the menu should not
+        // claim otherwise: a screenshot with "End of chapter" ticked beside a running countdown is a
+        // picture of something the app cannot actually do.
+        match self.preview_left {
+            Some(_) if self.preview.is_some() => Sleep::Minutes(15),
+            _ => Sleep::default(),
+        }
     }
 
     /// Draws whatever the reader should see, and handles the controls.

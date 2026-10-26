@@ -50,6 +50,17 @@ Download the latest build from [Releases](https://github.com/trentster/bible-rs/
 
 <table>
 <tr>
+<td><img src="docs/screenshots/read-aloud-settings.png" alt="Read aloud settings: four narrators, English US and UK, male and female, each with a sample button, and the read-along switch"></td>
+<td><img src="docs/screenshots/read-aloud-timer.png" alt="The playback bar over Psalm 23 with pause, the reading position, a 15-minute countdown, and the stop-after menu"></td>
+</tr>
+<tr>
+<td><img src="docs/screenshots/read-aloud-tint.png" alt="Psalm 23 with the sentence being read tinted across verses 1 and 2"></td>
+<td><img src="docs/screenshots/lookup.png" alt="Looking up the word shepherd in Psalm 23: senses from WordNet in a popover anchored to the word"></td>
+</tr>
+</table>
+
+<table>
+<tr>
 <td><img src="docs/screenshots/psalm-sepia.png" alt="Psalm 23 in the Berean Standard Bible, sepia theme"></td>
 <td><img src="docs/screenshots/dark-verse-per-line.png" alt="Matthew 5 in dark theme, verse per line, red letters"></td>
 </tr>
