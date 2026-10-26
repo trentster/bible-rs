@@ -107,6 +107,8 @@ const SAY_AS: &[(&str, &str)] = &[
     ("bezaleel", "bezalayl"),
     ("hypocrite", "hippo-crit"),
     ("hypocrites", "hippo-crits"),
+    ("sadducee", "sadjusee"),
+    ("sadducees", "sadjusees"),
 ];
 
 /// Respells the words in [`SAY_AS`], leaving everything else — punctuation, capitals, apostrophes —

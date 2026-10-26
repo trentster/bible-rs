@@ -322,4 +322,10 @@ mod tests {
         // Nothing else that starts with hypoc- is touched.
         assert_eq!(narration("their hypocrisy"), "their hypocrisy");
     }
+
+    #[test]
+    fn sadducees_is_said_sadjusees() {
+        assert_eq!(narration("the Pharisees and the Sadducees"), "the Pharisees and the Sadjusees");
+        assert_eq!(narration("a Sadducee said"), "a Sadjusee said");
+    }
 }
