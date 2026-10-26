@@ -740,9 +740,12 @@ impl Reader {
                     })
                 {
                     let x = geom.x0 + block.column as f32 * (geom.col_w + geom.gutter);
+                    // The text's own measure, not the whole column: a wash that stops where the
+                    // words stop rather than running out into the margin.
+                    let wide = (self.em * env.typo.measure).min(geom.col_w);
                     let band = Rect::from_min_max(
                         pos2(x - 10.0, bo.y - 1.0),
-                        pos2(x + geom.col_w + 10.0, bo.y + block.rect().height() + 1.0),
+                        pos2(x + wide + 10.0, bo.y + block.rect().height() + 1.0),
                     );
                     painter.rect_filled(band, CornerRadius::same(0), p.accent_soft.gamma_multiply(0.6));
                 }
