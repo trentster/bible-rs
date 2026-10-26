@@ -156,6 +156,20 @@ impl Listen {
         Some(VerseRef::new(at.book(), at.chapter(), verse))
     }
 
+    /// The chapter the reading belongs to, whether it is playing, paused or waiting for play.
+    pub fn heard_chapter(&self) -> Option<ChapterIdx> {
+        self.active().then(|| self.chapter_of(&self.state()))
+    }
+
+    /// The reader has navigated somewhere else: the voice stops rather than talking over a page
+    /// it has nothing to do with. Only navigation calls this, so a reading that rolls on into the
+    /// next chapter is never mistaken for the reader leaving.
+    pub fn leaving(&mut self, going_to: ChapterIdx) {
+        if self.heard_chapter().is_some_and(|heard| heard != going_to) {
+            self.stop();
+        }
+    }
+
     /// The sentence being spoken, as the verses it covers: what the page tints while it is read.
     /// `None` when nothing is sounding, or when the reader has turned the tint off.
     pub fn speaking_span(&self) -> Option<(VerseRef, VerseRef)> {
@@ -506,5 +520,18 @@ mod tests {
         // An announcement has no verse, so there is nothing to tint.
         let announcing = ReadingState { verse: None, speaking: true, ..Default::default() };
         assert!(spoken_span(&announcing, at).is_none());
+    }
+
+    #[test]
+    fn going_elsewhere_stops_the_reading_but_staying_keeps_it() {
+        let psalm = ChapterIdx::new(bible_core::books::BookId::PSALMS, 23).unwrap();
+        let matthew = ChapterIdx::new(bible_core::books::BookId::from_code("MAT").unwrap(), 1).unwrap();
+        let mut listen = Listen::new();
+        listen.show_preview(1, 600.0, psalm);
+        assert!(listen.active());
+        listen.leaving(psalm);
+        assert!(listen.active(), "staying in the chapter being read keeps it");
+        listen.leaving(matthew);
+        assert!(!listen.active(), "navigating to another chapter stops it");
     }
 }

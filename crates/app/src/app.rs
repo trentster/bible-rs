@@ -698,6 +698,7 @@ impl BibleApp {
             Action::Jump { chapter, verse, flash } => {
                 self.pages.open(crate::pages::Page::Reader);
                 self.jump(chapter, verse, flash);
+                self.reading_leaves();
                 // Landing on a specific verse selects it, so N/B/C/1–6 act on it right away. Anywhere
                 // else, a selection left from before would send J/K back to where it was.
                 let landed =
@@ -709,12 +710,14 @@ impl BibleApp {
             Action::Back => {
                 if let Some((c, v)) = self.history.back(self.here()) {
                     self.reader.jump(c, Some(v), false);
+                    self.reading_leaves();
                 }
             }
             Action::Forward => {
                 self.pages.open(crate::pages::Page::Reader);
                 if let Some((c, v)) = self.history.forward(self.here()) {
                     self.reader.jump(c, Some(v), false);
+                    self.reading_leaves();
                 }
             }
             Action::PrevChapter => {
@@ -727,11 +730,13 @@ impl BibleApp {
                 };
                 if let Some(t) = target {
                     self.reader.jump(t, None, false);
+                    self.reading_leaves();
                 }
             }
             Action::NextChapter => {
                 if let Some(n) = self.here().0.next() {
                     self.reader.jump(n, None, false);
+                    self.reading_leaves();
                 }
             }
             Action::SetTranslation(id) => {
@@ -1447,6 +1452,17 @@ impl BibleApp {
 
     /// Read aloud: the whole current chapter, from the top, in the voice chosen in Settings.
     #[cfg(feature = "speak")]
+    /// The voice follows the page: navigating to another chapter stops the reading rather than
+    /// leaving it talking over a page it has nothing to do with. Only navigation calls this, so a
+    /// reading that rolls on into the next chapter is never mistaken for the reader leaving.
+    fn reading_leaves(&mut self) {
+        #[cfg(feature = "speak")]
+        {
+            let at = self.reader.location.0;
+            self.listen.leaving(at);
+        }
+    }
+
     fn toggle_listen(&mut self) {
         if self.listen.active() {
             self.listen.stop();
