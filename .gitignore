@@ -6,3 +6,6 @@
 /data/speech
 *.dmg
 .DS_Store
+
+# STEPBible source texts downloaded by scripts/build-original.py (97 MB, never committed)
+/.cache/

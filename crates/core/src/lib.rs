@@ -16,6 +16,7 @@ pub mod model;
 pub mod nlt_html;
 #[cfg(feature = "native")]
 pub mod online;
+pub mod original;
 pub mod plans;
 pub mod reference;
 pub mod search;
