@@ -1,9 +1,10 @@
 # bible-rs
 
 Bible: a very fast, native Bible reader for the Mac, written in Rust. Just the Bible — beautifully
-typeset, searchable as you type, with highlights, notes and bookmarks kept on your computer. The
-[iPhone version](#iphone) and the [web reader](#web) share the same core, and a
-[Windows build](WINDOWS.md) runs the same app (unsigned for now).
+typeset, searchable as you type, with highlights, notes and bookmarks kept on your computer.
+
+**This fork builds and ships macOS only.** Upstream also has an iPhone app and a web reader; they
+are in the tree but are not built, tested or released here.
 
 ![Reading John 1 in the King James Version](docs/screenshots/reader-light.png)
 
@@ -165,7 +166,7 @@ every major modern translation: how to get it free, or why it has to be bought.
 1. Settings (⌘,) → Translations → **Online translations**.
 2. NLT and NET: click **Add NLT** or **Add NET**. ESV: **Get Free Key…** opens api.esv.org; paste
    the key and click **Add ESV**. API.Bible: paste your key, click **List My Bibles…**, and **Add**
-   the ones you want. Keys are stored in the **macOS Keychain** (on Linux, a `secrets.json` that
+   the ones you want. Keys are stored in the **macOS Keychain** (elsewhere, a `secrets.json` that
    only you can read).
 3. Pick the translation like any other, alone or in parallel columns.
 
@@ -328,24 +329,17 @@ bible-rs search "love one another" # prints the query time
 
 ## Building
 
-Requires Rust 1.95+, the minimum egui 0.36 supports.
+Requires Rust 1.95+, the minimum egui 0.36 supports. Building and bundling below is macOS.
 
 ```sh
-# Linux needs: libxkbcommon-dev libgl1-mesa-dev libwayland-dev libx11-dev
 cargo build --release
 ./target/release/bible-rs
 ```
 
-On macOS, `scripts/bundle-macos.sh` builds `dist/Bible.app` (`UNIVERSAL=1` for arm64 +
-x86_64, `SIGN_IDENTITY=…` to sign). `scripts/release-macos.sh` makes the downloadable release: the
-universal app signed with a Developer ID and notarized, a disk image, a zip, their checksums and
-the signed update feed that installed copies check with Sparkle ([RELEASING.md](RELEASING.md)).
-CI builds an ad-hoc signed DMG on every push and uploads it as an artifact.
-
-On Windows, `cargo build --release -p bible-rs` builds `bible-rs.exe` and
-`scripts/package-windows.sh` the per-user installer; [WINDOWS.md](WINDOWS.md) covers building
-(also cross-compiling from a Mac), installing, signing and what's still missing. CI builds the
-unsigned installer on every pull request and uploads it as an artifact.
+On macOS, `scripts/bundle-macos.sh` builds `dist/Bible.app` (`UNIVERSAL=1` for arm64 + x86_64).
+Releases from this fork are **ad-hoc signed** — right-click → **Open** on first launch — with the
+Sparkle update feed off, and no CI runs here. Notarised, Developer-ID-signed builds are upstream's
+`scripts/release-macos.sh` ([RELEASING.md](RELEASING.md)).
 
 Other tasks:
 
@@ -367,61 +361,12 @@ bible-rs export --markdown -o notes.md
 bible-rs import-notes notes.json
 ```
 
-## iPhone
+## iPhone and web
 
-`apps/ios` is the iPhone app (iPad runs it too): SwiftUI around the same Rust core, through
-UniFFI (`crates/ffi`). It has the Mac's typesetting, themes and colours. You can scroll through all
-1,189 chapters, jump to a reference (`jn 3:16`), search as you type, and highlight, annotate,
-bookmark, copy or share verses. Parallel and compare views, import and online translations are
-Mac-only for now.
-
-<table>
-<tr>
-<td><img src="docs/screenshots/ios/reader-light.png" alt="John 3 on iPhone, light theme, with highlights and a note"></td>
-<td><img src="docs/screenshots/ios/psalm-dark.png" alt="Psalm 23 on iPhone, dark theme"></td>
-<td><img src="docs/screenshots/ios/search-light.png" alt="Search on iPhone"></td>
-<td><img src="docs/screenshots/ios/selection-dark.png" alt="A selected verse with highlight colours and actions"></td>
-</tr>
-</table>
-
-Requires Xcode 26 (the app targets iOS 17+), [XcodeGen](https://github.com/yonaskolb/XcodeGen)
-(`brew install xcodegen`) and rustup; the script adds the iOS Rust targets.
-
-```sh
-scripts/build-ios.sh --run        # build, then launch in a simulator
-scripts/build-ios.sh --test       # UI tests in a simulator
-scripts/build-ios.sh --framework  # just the Rust framework and the Xcode project, then:
-open apps/ios/Bible.xcodeproj
-scripts/ios-screenshots.sh        # regenerate docs/screenshots/ios/
-scripts/ios-screenshots.sh --app-store  # full-size iPhone and iPad sets for the App Store
-```
-
-`--run` and `--test` use a simulator named "Bible iPhone", created if needed; set
-`SIMULATOR="iPhone 17 Pro"` to use another. Simulator builds need no signing. For a device, create
-`apps/ios/Config/Local.xcconfig` (git-ignored) with `DEVELOPMENT_TEAM = <your team ID>`, and
-`BIBLE_BUNDLE_ID = <your bundle ID>` if you don't own the default one. Then run
-`scripts/build-ios.sh --device` or run from Xcode.
-
-`scripts/release-ios.sh` archives, signs and uploads a build for the App Store.
-[apps/ios/APP_STORE.md](apps/ios/APP_STORE.md) covers the setup, the listing and the answers App
-Store Connect asks for.
-
-## Web
-
-[simplymybible.com/read](https://simplymybible.com/read) is the Mac app in a browser: the same
-typesetting, themes, palette, search, study tools, pages and shortcuts, with the core compiled to
-WebAssembly. Every chapter of every bundled translation is also a static page
-(`/read/kjv/john/3`). [Importing](#import-a-translation-you-own) works as on the Mac, with the same
-formats, and the conversion runs in the browser. Study data, settings and imported translations
-stay in the browser. After one visit the reader works offline. Online translations are Mac-only.
-
-The site is the SvelteKit app in `site/` ([site/README.md](site/README.md)):
-
-```sh
-scripts/build-web.sh               # after changing crates/web or the parts of bible-core it uses
-cd site && npm install && npm run dev   # http://localhost:5173/read
-npm run build                      # prerenders the 8,323 chapter pages
-```
+Upstream ships an iPhone app (`apps/ios`) and a web reader at
+[simplymybible.com/read](https://simplymybible.com/read), both sharing this core through
+`crates/ffi` and `crates/web`. **This fork does not build, test or release either of them** — the
+code is present because it is upstream's, and Read Aloud exists on the Mac only.
 
 ## How it's built
 
@@ -431,11 +376,11 @@ crates/core   bible-core: canonical book grid, verse-indexed model, .bbl format,
               ESV/API.Bible providers, Keychain secrets, translation library
 crates/app    bible-rs: egui app — reader (typesetting, continuous scroll), sidebar, palette,
               panels, settings, macOS menu bar, CLI
-crates/ffi    bible-ffi: the core for mobile apps through UniFFI — chapters as styled blocks,
+crates/ffi    bible-ffi: the core for mobile apps through UniFFI (upstream; not built here) — chapters as styled blocks,
               search, references, study data, design tokens
-crates/web    bible-web: the core for the browser through wasm-bindgen (built into site/)
-apps/ios      the iPhone app: SwiftUI, with a UIKit/TextKit reader; XcodeGen project.yml
-site          the website (SvelteKit): the landing page and the web reader at /read
+crates/web    bible-web: the core for the browser through wasm-bindgen (upstream; not built here)
+apps/ios      the iPhone app: SwiftUI, with a UIKit/TextKit reader (upstream; not built here)
+site          the website (SvelteKit): the landing page and the web reader at /read (upstream)
 xtask         reproducible bundled-data build from pinned public-domain sources
 data          generated .bbl files (public domain only)
 ```
