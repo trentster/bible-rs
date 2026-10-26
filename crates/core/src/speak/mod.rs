@@ -314,4 +314,12 @@ mod tests {
         assert_eq!(narration("Bezaleel"), "Bezalayl");
         assert_eq!(narration("and Bezaleel the son of Uri"), "and Bezalayl the son of Uri");
     }
+
+    #[test]
+    fn hypocrites_is_said_hippo_crits() {
+        assert_eq!(narration("Woe unto you, hypocrites!"), "Woe unto you, hippo-crits!");
+        assert_eq!(narration("Thou hypocrite"), "Thou hippo-crit");
+        // Nothing else that starts with hypoc- is touched.
+        assert_eq!(narration("their hypocrisy"), "their hypocrisy");
+    }
 }
