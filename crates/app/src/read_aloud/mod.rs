@@ -16,10 +16,15 @@ pub use ui::Listen;
 use bible_core::books::{ChapterIdx, VerseRef};
 
 /// What Listen reads: the passage the reader has selected, or else the chapter at the top of the
-/// view. A selection is the reader saying "here", and reading the chapter they scrolled past
-/// instead is the app ignoring them.
-pub fn chapter_to_read(selection: Option<(VerseRef, VerseRef)>, location: ChapterIdx) -> ChapterIdx {
-    selection.map_or(location, |(from, _)| from.chapter_idx())
+/// view — and the verse to start on. A selection is the reader saying "here", so pressing play
+/// reads from that verse rather than from the top of the chapter it sits in.
+pub fn passage_to_read(selection: Option<(VerseRef, VerseRef)>, location: ChapterIdx) -> (ChapterIdx, u8) {
+    selection.map_or((location, 1), |(from, _)| (from.chapter_idx(), from.verse))
+}
+
+/// The verses Listen speaks: from `start` to the end of the chapter.
+pub fn verses_from(verses: Vec<(u32, String)>, start: u8) -> Vec<(u32, String)> {
+    verses.into_iter().filter(|(n, _)| *n >= start as u32).collect()
 }
 
 use std::collections::HashMap;
@@ -175,6 +180,28 @@ pub fn play_for_test(pcm: &[f32]) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn listen_starts_at_the_verse_the_reader_picked() {
+        let matthew = ChapterIdx::new(BookId(39), 22).unwrap();
+        let verse = VerseRef::new(BookId(39), 22, 35);
+        assert_eq!(passage_to_read(Some((verse, verse)), matthew), (matthew, 35));
+        // A selection elsewhere still decides the chapter.
+        let john = ChapterIdx::new(BookId(42), 3).unwrap();
+        let elsewhere = VerseRef::new(BookId(42), 3, 16);
+        assert_eq!(passage_to_read(Some((elsewhere, elsewhere)), matthew), (john, 16));
+        // Nothing selected: the chapter from its first verse.
+        assert_eq!(passage_to_read(None, matthew), (matthew, 1));
+    }
+
+    #[test]
+    fn the_reading_skips_the_verses_before_the_one_picked() {
+        let chapter: Vec<(u32, String)> = (1..=37).map(|n| (n, format!("verse {n}"))).collect();
+        let from = verses_from(chapter.clone(), 35);
+        assert_eq!(from.len(), 3);
+        assert_eq!(from[0].0, 35);
+        assert_eq!(from[2].0, 37);
+        assert_eq!(verses_from(chapter, 1).len(), 37);
+    }
     use bible_core::books::BookId;
 
     fn kjv() -> bible_core::Translation {

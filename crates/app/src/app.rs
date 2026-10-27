@@ -1515,12 +1515,15 @@ impl BibleApp {
             self.listen.stop();
             return;
         }
-        let chapter = crate::read_aloud::chapter_to_read(self.reader.selection, self.reader.location.0);
+        let (chapter, from) =
+            crate::read_aloud::passage_to_read(self.reader.selection, self.reader.location.0);
         let Ok(text) = self.library.load(&self.settings.translation) else {
             return;
         };
-        let verses: Vec<(u32, String)> =
-            text.verses_in(chapter).map(|v| (v.number as u32, v.text.to_string())).collect();
+        let verses = crate::read_aloud::verses_from(
+            text.verses_in(chapter).map(|v| (v.number as u32, v.text.to_string())).collect(),
+            from,
+        );
         if verses.is_empty() {
             return;
         }
