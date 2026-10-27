@@ -218,12 +218,23 @@ check_plist() {
 check_plist CFBundleIdentifier dev.bible-rs.app
 check_plist CFBundleName Bible
 check_plist CFBundleExecutable Bible
-check_plist SUFeedURL "$REPO_URL/releases/latest/download/appcast.xml"
-check_plist SUPublicEDKey "$SPARKLE_PUBLIC_KEY"
-# Sparkle refuses to start with SURequireSignedFeed unless SUVerifyUpdateBeforeExtraction is on.
-check_plist SURequireSignedFeed true
-check_plist SUVerifyUpdateBeforeExtraction true
-check_plist SUEnableAutomaticChecks true
+# A build with no updater bundled has no feed to point at: bundle-macos.sh writes these keys only
+# with SPARKLE_UPDATES=1. An ad-hoc release (--ad-hoc, no Developer ID, no signing key) is one, so
+# it must be checked for their absence rather than their value.
+if [[ "${SPARKLE_UPDATES:-0}" == "1" ]]; then
+  check_plist SUFeedURL "$REPO_URL/releases/latest/download/appcast.xml"
+  check_plist SUPublicEDKey "$SPARKLE_PUBLIC_KEY"
+  # Sparkle refuses to start with SURequireSignedFeed unless SUVerifyUpdateBeforeExtraction is on.
+  check_plist SURequireSignedFeed true
+  check_plist SUVerifyUpdateBeforeExtraction true
+  check_plist SUEnableAutomaticChecks true
+else
+  for key in SUFeedURL SUPublicEDKey SURequireSignedFeed SUVerifyUpdateBeforeExtraction; do
+    got="$(plist "$key" 2>/dev/null || true)"
+    [[ -z "$got" ]] || die "Info.plist has $key='$got' but no updater is bundled (SPARKLE_UPDATES=0)"
+  done
+  echo "Update feed: none (no updater bundled)"
+fi
 check_plist CFBundleShortVersionString "$VERSION"
 check_plist CFBundleVersion "$VERSION"
 check_plist LSMinimumSystemVersion "$MIN_MACOS"
