@@ -85,6 +85,16 @@ mod tests {
     }
 
     #[test]
+    fn a_chapter_started_part_way_announces_the_verse_it_starts_on() {
+        // Matthew 22:35, picked in the reader: the announcement must not claim the chapter starts
+        // here, or the reader hears "chapter twenty-two" and then verse thirty-five.
+        let verses = vec![(35, "One of them, a lawyer".to_string()), (36, "Master, which is".to_string())];
+        let script = chapter("Matthew", 22, &verses);
+        assert_eq!(script[0].text, "Matthew, chapter twenty-two, verse thirty-five");
+        assert_eq!(script[1].text, "One of them, a lawyer");
+    }
+
+    #[test]
     fn an_empty_verse_is_skipped_rather_than_spoken() {
         let verses = vec![(1, "   ".to_string()), (2, "To whom also".to_string())];
         let script = chapter("Hebrews", 7, &verses);

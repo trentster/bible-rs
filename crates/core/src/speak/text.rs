@@ -30,15 +30,18 @@ pub const CLAUSE_PAUSE_MS: u32 = 110;
 pub const MAX_SENTENCE_WORDS: usize = 60;
 pub const MAX_SENTENCE_VERSES: usize = 3;
 
-/// A chapter as the reader hears it: the announcement, then every verse in order.
+/// A chapter as the reader hears it: the announcement, then every verse in order. Starting part
+/// way through — from a verse the reader picked — the announcement names that verse too, rather
+/// than claiming the chapter starts here.
 pub fn chapter(book: &str, number: u32, verses: &[(u32, String)]) -> Vec<Utterance> {
     let mut said = Vec::with_capacity(verses.len() + 1);
-    said.push(Utterance {
-        text: format!("{}, chapter {}", book, words(number as u64)),
-        pause_ms: ANNOUNCE_PAUSE_MS,
-        verse: None,
-        until: None,
-    });
+    let opening = match verses.first() {
+        Some((from, _)) if *from > 1 => {
+            format!("{}, chapter {}, verse {}", book, words(number as u64), words(*from as u64))
+        }
+        _ => format!("{}, chapter {}", book, words(number as u64)),
+    };
+    said.push(Utterance { text: opening, pause_ms: ANNOUNCE_PAUSE_MS, verse: None, until: None });
     // Verses are not sentences. The KJV ends a verse with a semicolon or a colon wherever the
     // sentence carries on across the verse number, and a narrator who pauses at that number reads
     // one sentence as two. So verses are gathered until the sentence ends, and only then does the

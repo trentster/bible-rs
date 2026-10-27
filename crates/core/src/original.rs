@@ -316,9 +316,7 @@ mod tests {
     /// Hebrew points and cantillation marks: the same word can be encoded with the marks in a
     /// different order, so tests compare the letters a reader sees.
     fn consonants(text: &str) -> String {
-        text.chars()
-            .filter(|c| !('\u{0591}'..='\u{05C7}').contains(c))
-            .collect()
+        text.chars().filter(|c| !('\u{0591}'..='\u{05C7}').contains(c)).collect()
     }
 
     #[test]
