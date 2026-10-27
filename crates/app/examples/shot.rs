@@ -264,6 +264,30 @@ fn run_step(harness: &mut Harness<'_, BibleApp>, step: &str) {
             eprintln!("{step} → drag:{}>{}", at(a), at(b));
             drag(harness, a, b);
         }
+        "scroll" => {
+            // `scroll:x,y,dy` — a wheel turn over a point, for lists that only show their end
+            // when scrolled.
+            let bits: Vec<&str> = arg.split(',').collect();
+            let (Some(x), Some(y), Some(dy)) = (
+                bits.first().and_then(|v| v.trim().parse::<f32>().ok()),
+                bits.get(1).and_then(|v| v.trim().parse::<f32>().ok()),
+                bits.get(2).and_then(|v| v.trim().parse::<f32>().ok()),
+            ) else {
+                eprintln!("BIBLE_RS_SHOT_SCRIPT: scroll wants x,y,dy");
+                return;
+            };
+            let p = egui::pos2(x, y);
+            harness.event(egui::Event::PointerMoved(p));
+            harness.step();
+            harness.event(egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point,
+                delta: egui::vec2(0.0, dy),
+                modifiers: egui::Modifiers::NONE,
+                phase: egui::TouchPhase::Move,
+            });
+            harness.step();
+            harness.run_steps(3);
+        }
         "key" => match egui::Key::from_name(arg.trim()) {
             Some(key) => {
                 harness.key_press(key);
