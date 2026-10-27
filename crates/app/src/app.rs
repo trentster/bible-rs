@@ -1190,7 +1190,8 @@ impl BibleApp {
                 if let Some(word) =
                     crate::lookup_popover::target(&self.reader, &self.library, &self.settings, pos)
                 {
-                    self.lookup = Some(crate::lookup_popover::LookUp::new(word, r.to_string()));
+                    let at = self.reader.text_pos(pos);
+                    self.lookup = Some(crate::lookup_popover::LookUp::new(word, r.to_string()).anchored(at));
                 }
             }
             "origin" => {
@@ -1201,7 +1202,8 @@ impl BibleApp {
                 if let Some(word) =
                     crate::lookup_popover::target(&self.reader, &self.library, &self.settings, pos)
                 {
-                    let mut look = crate::lookup_popover::LookUp::new(word, r.to_string());
+                    let at = self.reader.text_pos(pos);
+                    let mut look = crate::lookup_popover::LookUp::new(word, r.to_string()).anchored(at);
                     look.show_words();
                     self.lookup = Some(look);
                 }

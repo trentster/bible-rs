@@ -45,8 +45,9 @@ pub struct LookUp {
     view: View,
     /// The dictionary entry behind one of those words, once the reader asks for it.
     entry: Option<original::Entry>,
-    /// The popover's own rect last frame, so a wheel can be told apart from a scroll of the list.
-    last_rect: Option<Rect>,
+    /// Where the looked-up word sits in the text. The popover lives exactly as long as that word
+    /// is on the page; when it scrolls away, the popover goes with it.
+    at_word: Option<TextPos>,
 }
 
 /// The popover's three faces: the English definition, the verse's original words, and one entry.
@@ -84,7 +85,7 @@ impl LookUp {
             origin_read: false,
             view: View::Definition,
             entry: None,
-            last_rect: None,
+            at_word: None,
         }
     }
 
@@ -100,6 +101,13 @@ impl LookUp {
 
     /// Opens the verse's original words straight away: a harness step, so a screenshot can show
     /// the list without scripting a click on the row.
+    /// The word this lookup was opened on, so the popover can tell when that word has left the
+    /// page and it should go with it.
+    pub fn anchored(mut self, at: Option<TextPos>) -> Self {
+        self.at_word = at;
+        self
+    }
+
     pub fn show_words(&mut self) {
         self.read_origin();
         if self.origin.is_some() {
@@ -109,14 +117,17 @@ impl LookUp {
 
     /// The lookup that the selection or the last right-click calls for, if there is one.
     pub fn here(reader: &Reader, library: &Library, settings: &Settings) -> Option<Self> {
+        let chosen_at = reader.clicked_text();
         match chosen(reader, library) {
-            Chosen::Words(word, verse) => return Some(Self::new(word, verse.to_string())),
+            Chosen::Words(word, verse) => {
+                return Some(Self::new(word, verse.to_string()).anchored(chosen_at));
+            }
             Chosen::TooLong => return None,
             Chosen::NoSuchWords => {}
         }
-        let at = reader.clicked_text()?;
+        let at = chosen_at?;
         let word = word_at(reader, library, settings, at)?;
-        Some(Self::new(word, at.verse.to_string()))
+        Some(Self::new(word, at.verse.to_string()).anchored(Some(at)))
     }
 
     /// The popover's body: WordNet's senses, or Easton's opening sentences for a Bible word, or a
@@ -196,16 +207,15 @@ impl LookUp {
             return true;
         }
         let screen = ctx.content_rect();
-        // The popover belongs to its word. A wheel over the page — not over the popover, where it
-        // scrolls the word list — means the reader has moved on, and the popover goes with the word
-        // rather than floating over text it no longer describes.
-        let wheel = ctx.input(|i| i.smooth_scroll_delta.x.abs() + i.smooth_scroll_delta.y.abs());
-        if wheel > 0.0 {
-            let over_popover =
-                ctx.pointer_latest_pos().is_some_and(|p| self.last_rect.is_some_and(|r| r.contains(p)));
-            if !over_popover {
+        // The popover belongs to its word: it lives exactly as long as that word is on the page.
+        // Looking the word up again each frame is the whole rule — no wheel watching, no height
+        // guesswork, and scrolling the popover's own list is irrelevant to it.
+        if let Some(at) = self.at_word {
+            let page = Rect::from_min_max(pos2(screen.left(), screen.top() + 52.0), screen.max);
+            let point = reader.point_at(at);
+            if !point.is_some_and(|p| page.contains(p)) {
                 if std::env::var("BIBLE_RS_TRACE_POPOVER").is_ok() {
-                    eprintln!("closing: the page scrolled under the popover");
+                    eprintln!("closing: word at {at:?} → point {point:?}, page {page:?}");
                 }
                 return true;
             }
@@ -280,7 +290,6 @@ impl LookUp {
         let top =
             if downward { anchor.bottom() + 3.0 + BEAK.y } else { anchor.top() - 3.0 - BEAK.y - height };
         let rect = Rect::from_min_size(pos2(left, top), vec2(WIDTH, height));
-        self.last_rect = Some(rect);
 
         // Taken out of `self` for the duration of the frame, so the closure can write to `self`
         // when a row is clicked without fighting the borrow it would otherwise hold.
