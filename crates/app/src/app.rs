@@ -1193,6 +1193,19 @@ impl BibleApp {
                     self.lookup = Some(crate::lookup_popover::LookUp::new(word, r.to_string()));
                 }
             }
+            "origin" => {
+                let (r, at) = arg.split_once('@').unwrap_or((arg, "600,352"));
+                let (x, y) = at.split_once(',').unwrap_or(("600", "352"));
+                self.reader.set_selection(bible_core::reference::parse(r).map(|r| r.verse_ref()));
+                let pos = egui::pos2(x.parse().unwrap_or(600.0), y.parse().unwrap_or(352.0));
+                if let Some(word) =
+                    crate::lookup_popover::target(&self.reader, &self.library, &self.settings, pos)
+                {
+                    let mut look = crate::lookup_popover::LookUp::new(word, r.to_string());
+                    look.show_words();
+                    self.lookup = Some(look);
+                }
+            }
             "menu" => {
                 let (r, at) = arg.split_once('@').unwrap_or((arg, "600,352"));
                 let (x, y) = at.split_once(',').unwrap_or(("600", "352"));

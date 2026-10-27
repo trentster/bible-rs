@@ -48,7 +48,7 @@ pub struct LookUp {
 }
 
 /// The popover's three faces: the English definition, the verse's original words, and one entry.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum View {
     Definition,
     Words,
@@ -85,6 +85,15 @@ impl LookUp {
         }
         self.origin_read = true;
         self.origin = self.at.and_then(|at| original::verse(at.book, at.chapter, at.verse));
+    }
+
+    /// Opens the verse's original words straight away: a harness step, so a screenshot can show
+    /// the list without scripting a click on the row.
+    pub fn show_words(&mut self) {
+        self.read_origin();
+        if self.origin.is_some() {
+            self.view = View::Words;
+        }
     }
 
     /// The lookup that the selection or the last right-click calls for, if there is one.
@@ -399,6 +408,16 @@ impl LookUp {
                         pos2(rect.right() - 1.0, rect.bottom() - 1.0),
                     );
                     let response = ui.allocate_rect(row, Sense::click());
+                    if std::env::var("BIBLE_RS_TRACE_POPOVER").is_ok() {
+                        eprintln!(
+                            "row: showing={:?} hovered={} clicked={} row_rect={:?} ptr={:?}",
+                            showing,
+                            response.hovered(),
+                            response.clicked(),
+                            row,
+                            ui.ctx().input(|i| i.pointer.interact_pos())
+                        );
+                    }
                     if response.hovered() {
                         painter.rect_filled(row, 0.0, p.fill);
                     }
