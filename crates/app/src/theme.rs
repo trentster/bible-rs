@@ -379,6 +379,10 @@ static LITERATA_ITALIC: &[u8] = include_bytes!("../assets/fonts/Literata-Italic.
 static INTER: &[u8] = include_bytes!("../assets/fonts/Inter.ttf");
 static INTER_MEDIUM: &[u8] = include_bytes!("../assets/fonts/Inter-Medium.ttf");
 static INTER_SEMIBOLD: &[u8] = include_bytes!("../assets/fonts/Inter-SemiBold.ttf");
+/// Cardo (SIL OFL) carries the Hebrew alphabet with its points, which neither Literata nor Inter
+/// has a single glyph for. It sits at the head of every family's fallbacks, so Hebrew resolves to it
+/// and nothing else changes: Latin and Greek still come from the face that was asked for.
+static CARDO: &[u8] = include_bytes!("../assets/fonts/Cardo-Regular.ttf");
 
 fn variable(bytes: &'static [u8], coords: &[(&[u8; 4], f32)]) -> Arc<FontData> {
     let tweak = FontTweak {
@@ -408,12 +412,14 @@ pub fn font_definitions() -> FontDefinitions {
         ("inter-medium", Arc::new(FontData::from_static(INTER_MEDIUM))),
         ("inter-semibold", Arc::new(FontData::from_static(INTER_SEMIBOLD))),
         ("inter-bold", variable(INTER, &[(b"wght", 700.0)])),
+        ("cardo", Arc::new(FontData::from_static(CARDO))),
     ];
     for (name, d) in data {
         fonts.font_data.insert(name.into(), d);
     }
     let with_fallbacks = |first: &str| {
-        let mut v = vec![first.to_string()];
+        // Cardo first among the fallbacks: it holds the Hebrew the reading faces do not.
+        let mut v = vec![first.to_string(), "cardo".to_string()];
         v.extend(fallbacks.iter().cloned());
         v
     };

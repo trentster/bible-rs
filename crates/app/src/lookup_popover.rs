@@ -12,6 +12,7 @@ use eframe::egui::{self, Key, Order, Rect, Sense, Stroke, pos2, vec2};
 
 use bible_core::VerseRef;
 use bible_core::library::Library;
+use bible_core::original;
 
 use crate::actions::Action;
 use crate::app::Settings;
@@ -25,25 +26,65 @@ const WIDTH: f32 = 320.0;
 const BEAK: egui::Vec2 = vec2(18.0, 9.0);
 /// How many words one lookup may cover: a phrase, never a whole verse.
 const MAX_WORDS: usize = 4;
+/// The row at the foot that offers the verse's own words, and the rows in the list behind it.
+const OFFER_ROW: f32 = 32.0;
+const WORD_ROW: f32 = 30.0;
 
 pub struct LookUp {
     /// The words being looked up, as the text has them.
     pub word: String,
     /// The reference they were chosen at, for the popover's second line.
     pub reference: String,
+    /// The verse the words are in, when the reference names one.
+    at: Option<VerseRef>,
+    /// The verse's own words, Hebrew, Aramaic or Greek. Read once, on the first frame the popover
+    /// opens, and kept: a lookup that stays open is drawn sixty times a second.
+    origin: Option<original::Verse>,
+    origin_read: bool,
+    /// Which face of the popover is showing.
+    view: View,
+    /// The dictionary entry behind one of those words, once the reader asks for it.
+    entry: Option<original::Entry>,
+}
+
+/// The popover's three faces: the English definition, the verse's original words, and one entry.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum View {
+    Definition,
+    Words,
+    Entry,
+}
+
+/// How one line of the body reads: prose, a dictionary's name, or the headword of an entry.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Line {
+    Text,
+    Source,
+    Head,
 }
 
 /// What the popover shows: the lines to scroll, the dictionary line pinned at its foot, and — when
 /// neither dictionary has the word — the word to search the web for.
 struct Body {
-    lines: Vec<(String, bool)>,
+    lines: Vec<(String, Line)>,
     pinned: Option<String>,
     search_for: Option<String>,
 }
 
 impl LookUp {
     pub fn new(word: String, reference: String) -> Self {
-        Self { word, reference }
+        let at = bible_core::reference::parse(&reference).map(|r| r.verse_ref());
+        Self { word, reference, at, origin: None, origin_read: false, view: View::Definition, entry: None }
+    }
+
+    /// The verse's original words, read the first time anyone looks at this word. Nothing is
+    /// unpacked for a lookup that never opens, and 18 MB is not touched until one does.
+    fn read_origin(&mut self) {
+        if self.origin_read {
+            return;
+        }
+        self.origin_read = true;
+        self.origin = self.at.and_then(|at| original::verse(at.book, at.chapter, at.verse));
     }
 
     /// The lookup that the selection or the last right-click calls for, if there is one.
@@ -67,7 +108,7 @@ impl LookUp {
         let found = bible_core::lexicon::define(&self.word);
         if found.is_empty() {
             return Body {
-                lines: vec![("No definition found".to_string(), false)],
+                lines: vec![("No definition found".to_string(), Line::Text)],
                 pinned: None,
                 search_for: Some(self.word.clone()),
             };
@@ -76,7 +117,7 @@ impl LookUp {
         // The KJV's spelling is not always the dictionary's headword, and the reader deserves to
         // know why they are being shown a different word.
         if let Some(headword) = &found.shown_as {
-            lines.push((format!("“{}” — shown as {}", self.word, headword), true));
+            lines.push((format!("“{}” — shown as {}", self.word, headword), Line::Source));
         }
         let one_source = found.entries.iter().all(|e| e.source == found.entries[0].source);
         let mut pinned = None;
@@ -85,13 +126,39 @@ impl LookUp {
                 pinned = Some(entry.source.label().to_string());
             }
             for paragraph in entry.body.split('\n').filter(|p| !p.trim().is_empty()) {
-                lines.push((paragraph.trim().to_string(), false));
+                lines.push((paragraph.trim().to_string(), Line::Text));
             }
             if !one_source {
-                lines.push((entry.source.label().to_string(), true));
+                lines.push((entry.source.label().to_string(), Line::Source));
             }
         }
         Body { lines, pinned, search_for: None }
+    }
+
+    /// The entry face: the word itself, what it is, then the definition line by line.
+    fn entry_body(&self) -> Body {
+        let Some(entry) = &self.entry else {
+            return Body { lines: Vec::new(), pinned: None, search_for: None };
+        };
+        let mut lines = Vec::new();
+        lines.push((entry.lemma.clone(), Line::Head));
+        let mut meta = entry.id.clone();
+        if !entry.translit.is_empty() {
+            meta.push_str(" · ");
+            meta.push_str(&entry.translit);
+        }
+        if !entry.pos.is_empty() {
+            meta.push_str(" · ");
+            meta.push_str(&entry.pos);
+        }
+        lines.push((meta, Line::Source));
+        if !entry.short.is_empty() {
+            lines.push((entry.short.clone(), Line::Text));
+        }
+        for line in entry.lines() {
+            lines.push((line.to_string(), Line::Text));
+        }
+        Body { lines, pinned: Some(original::credit().to_string()), search_for: None }
     }
 
     /// Draws the popover hanging from the looked-up words; returns `true` to close.
@@ -107,36 +174,59 @@ impl LookUp {
         }
         let screen = ctx.content_rect();
         let anchor = anchor(reader).unwrap_or_else(|| crate::note_popover::fallback_anchor(screen));
-        let body = self.body();
+        // Which face of the popover this frame shows. The verse's own words are read once, and
+        // only when the definition face is the one on screen: nothing is unpacked for a lookup that
+        // never gets that far.
+        if self.view == View::Definition {
+            self.read_origin();
+        }
+        let showing = self.view;
+        let body = match showing {
+            View::Entry => self.entry_body(),
+            // A list of the verse's own words is not the dictionary's work: it carries the
+            // original-language credit instead.
+            View::Words => Body { pinned: Some(original::credit().to_string()), ..self.body() },
+            View::Definition => self.body(),
+        };
+        // The row that offers the verse's original words, or leads back out of them.
+        let offer = if self.origin.is_some() { OFFER_ROW + 1.0 } else { 0.0 };
         // A dictionary line at the foot takes a little padding, whatever the entry's length.
         let foot = if body.pinned.is_some() { 24.0 } else { 0.0 };
         // A search button, when there is nothing to show.
         let search_height = if body.search_for.is_some() { 42.0 } else { 0.0 };
         // Wrapped text, so a long entry is measured rather than counted in fixed-height lines.
         let wrap = WIDTH - 32.0;
-        let measured: Vec<(std::sync::Arc<egui::Galley>, bool)> = body
+        let measured: Vec<(std::sync::Arc<egui::Galley>, Line)> = body
             .lines
             .iter()
-            .map(|(line, is_source)| {
-                let font = if *is_source { theme::ui_font(11.5) } else { theme::ui_font(13.0) };
-                (ctx.fonts_mut(|f| f.layout(line.clone(), font, p.ink, wrap)), *is_source)
+            .map(|(line, style)| {
+                let font = match style {
+                    Line::Source => theme::ui_font(11.5),
+                    Line::Head => egui::FontId::new(19.0, theme::family(theme::SERIF)),
+                    Line::Text => theme::ui_font(13.0),
+                };
+                (ctx.fonts_mut(|f| f.layout(line.clone(), font, p.ink, wrap)), *style)
             })
             .collect();
         let mut text_height = 0.0;
-        for (i, (galley, is_source)) in measured.iter().enumerate() {
-            if *is_source {
+        for (i, (galley, style)) in measured.iter().enumerate() {
+            if *style != Line::Text {
                 text_height += 4.0;
             }
             text_height += galley.size().y + 4.0;
-            let next_starts_an_entry = measured.get(i + 1).is_some_and(|(_, next)| !*next);
-            if *is_source && next_starts_an_entry {
+            let next_starts_an_entry = measured.get(i + 1).is_some_and(|(_, next)| *next == Line::Text);
+            if *style == Line::Source && next_starts_an_entry {
                 text_height += 10.0;
             }
         }
-        // A long entry scrolls rather than growing the popover off the screen.
-        let cap = (screen.height() * 0.42).max(80.0);
-        let body_height = text_height.min(cap);
-        let chrome = 64.5 + 14.0 + 14.0 + foot + search_height;
+        // A long entry scrolls rather than growing the popover off the screen. A list of words is
+        // allowed more of the screen: it is a list, and half a verse's words is worse than none.
+        let share = if showing == View::Words { 0.62 } else { 0.42 };
+        let cap = (screen.height() * share).max(80.0);
+        let list_height = self.origin.as_ref().map_or(0.0, |v| v.words.len() as f32 * WORD_ROW);
+        let natural = if showing == View::Words { list_height } else { text_height };
+        let body_height = natural.min(cap);
+        let chrome = 64.5 + 14.0 + 14.0 + foot + search_height + offer;
         let height = chrome + body_height;
 
         let below = screen.bottom() - (anchor.bottom() + 3.0 + BEAK.y) - 16.0;
@@ -148,6 +238,11 @@ impl LookUp {
             if downward { anchor.bottom() + 3.0 + BEAK.y } else { anchor.top() - 3.0 - BEAK.y - height };
         let rect = Rect::from_min_size(pos2(left, top), vec2(WIDTH, height));
 
+        // Taken out of `self` for the duration of the frame, so the closure can write to `self`
+        // when a row is clicked without fighting the borrow it would otherwise hold.
+        let origin = self.origin.take();
+        let mut opened: Option<usize> = None;
+        let mut go: Option<View> = None;
         let mut close = false;
         let area = egui::Area::new(egui::Id::new("lookup-popover"))
             .order(Order::Foreground)
@@ -200,21 +295,70 @@ impl LookUp {
 
                 let body_rect = Rect::from_min_max(
                     pos2(rect.left() + 16.0, rect.top() + 64.5 + 12.0),
-                    pos2(rect.right() - 16.0, rect.bottom() - 14.0 - foot - search_height),
+                    pos2(rect.right() - 16.0, rect.bottom() - 14.0 - foot - search_height - offer),
                 );
                 let mut child = ui.new_child(egui::UiBuilder::new().max_rect(body_rect));
                 child.set_clip_rect(body_rect.intersect(ctx.content_rect()));
                 child.spacing_mut().item_spacing.y = 4.0;
                 egui::ScrollArea::vertical().auto_shrink([false, false]).show(&mut child, |ui| {
-                    for (galley, is_source) in &measured {
-                        if *is_source {
-                            ui.add_space(0.0);
-                            let text = egui::WidgetText::Galley(galley.clone());
-                            ui.add(egui::Label::new(text.color(p.ink_2)).wrap());
-                            ui.add_space(10.0);
-                        } else {
-                            let text = egui::WidgetText::Galley(galley.clone());
-                            ui.add(egui::Label::new(text).wrap());
+                    if showing == View::Words
+                        && let Some(verse) = &origin
+                    {
+                        // The rows are placed by their own height: the scroll area's gap between
+                        // items would push the last word of a psalm past the clip.
+                        ui.spacing_mut().item_spacing.y = 0.0;
+                        for (i, word) in verse.words.iter().enumerate() {
+                            let (row, response) =
+                                ui.allocate_exact_size(vec2(ui.available_width(), WORD_ROW), Sense::click());
+                            if response.hovered() {
+                                ui.painter().rect_filled(row, 4.0, p.fill);
+                            }
+                            let base = row.top() + 7.0;
+                            let mut x = row.left();
+                            x += text(
+                                ui.painter(),
+                                x,
+                                base,
+                                16.0,
+                                &word.surface,
+                                egui::FontId::new(16.0, theme::family(theme::SERIF)),
+                                p.ink,
+                                false,
+                            ) + 7.0;
+                            x += text(
+                                ui.painter(),
+                                x,
+                                base + 1.0,
+                                11.0,
+                                &word.translit,
+                                theme::ui_font(10.5),
+                                p.ink_3,
+                                false,
+                            ) + 7.0;
+                            text(
+                                ui.painter(),
+                                x,
+                                base + 1.0,
+                                11.0,
+                                &word.gloss,
+                                egui::FontId::new(12.0, theme::family(theme::SERIF)),
+                                p.ink_2,
+                                false,
+                            );
+                            if response.clicked() {
+                                opened = Some(i);
+                            }
+                        }
+                    } else {
+                        for (galley, style) in &measured {
+                            if *style == Line::Source {
+                                let text = egui::WidgetText::Galley(galley.clone());
+                                ui.add(egui::Label::new(text.color(p.ink_2)).wrap());
+                                ui.add_space(10.0);
+                            } else {
+                                let text = egui::WidgetText::Galley(galley.clone());
+                                ui.add(egui::Label::new(text).wrap());
+                            }
                         }
                     }
                 });
@@ -222,7 +366,7 @@ impl LookUp {
                 // network request — it hands the word to the reader's own browser.
                 if let Some(word) = &body.search_for {
                     let button = Rect::from_min_size(
-                        pos2(rect.left() + 16.0, rect.bottom() - 14.0 - foot - 34.0),
+                        pos2(rect.left() + 16.0, rect.bottom() - 14.0 - foot - 34.0 - offer),
                         vec2(widgets::secondary_button_width(ui, "Search the web"), 28.0),
                     );
                     if widgets::secondary_button(ui, p, button, "Search the web", ui.id().with("lookup-web"))
@@ -239,7 +383,7 @@ impl LookUp {
                     text(
                         &painter,
                         x,
-                        rect.bottom() - 15.0,
+                        rect.bottom() - 15.0 - offer,
                         11.0,
                         &format!("Source: {label}"),
                         egui::FontId::new(11.5, theme::family(theme::SERIF_ITALIC)),
@@ -247,7 +391,66 @@ impl LookUp {
                         false,
                     );
                 }
+                if offer > 0.0 {
+                    let top = rect.bottom() - offer;
+                    painter.hline(rect.x_range(), top, Stroke::new(1.0, p.separator));
+                    let row = Rect::from_min_max(
+                        pos2(rect.left() + 1.0, top + 1.0),
+                        pos2(rect.right() - 1.0, rect.bottom() - 1.0),
+                    );
+                    let response = ui.allocate_rect(row, Sense::click());
+                    if response.hovered() {
+                        painter.rect_filled(row, 0.0, p.fill);
+                    }
+                    let (label, tail, next) = match showing {
+                        View::Definition => {
+                            let language = origin.as_ref().map_or("Original", |v| v.language.name());
+                            let count = origin.as_ref().map_or(0, |v| v.words.len());
+                            let words = if count == 1 { "word" } else { "words" };
+                            (language.to_string(), format!("{count} {words}"), Some(View::Words))
+                        }
+                        View::Words => {
+                            ("‹  English definition".to_string(), String::new(), Some(View::Definition))
+                        }
+                        View::Entry => {
+                            let language = origin.as_ref().map_or("Original", |v| v.language.name());
+                            (format!("‹  {language} words"), String::new(), Some(View::Words))
+                        }
+                    };
+                    let mid = (row.top() + row.bottom()) / 2.0;
+                    let ink = if response.hovered() { p.ink } else { p.ink_2 };
+                    let mut x = row.left() + 16.0;
+                    x += text(&painter, x, mid - 7.0, 14.0, &label, theme::ui_font(12.0), ink, false) + 8.0;
+                    if !tail.is_empty() {
+                        text(&painter, x, mid - 7.0, 14.0, &tail, theme::ui_font(12.0), p.ink_3, false);
+                    }
+                    text(
+                        &painter,
+                        row.right() - 16.0,
+                        mid - 9.0,
+                        16.0,
+                        if showing == View::Definition { "›" } else { "" },
+                        theme::ui_font(14.0),
+                        if response.hovered() { p.accent } else { p.ink_3 },
+                        true,
+                    );
+                    if response.clicked()
+                        && let Some(next) = next
+                    {
+                        go = Some(next);
+                    }
+                }
             });
+        self.origin = origin;
+        if let Some(next) = go {
+            self.view = next;
+        }
+        if let Some(index) = opened
+            && let Some(word) = self.origin.as_ref().and_then(|v| v.words.get(index))
+        {
+            self.entry = original::entry(&word.strong);
+            self.view = View::Entry;
+        }
         // A click anywhere outside closes it, as the note popover already behaves.
         close || area.response.clicked_elsewhere()
     }

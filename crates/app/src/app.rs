@@ -1185,8 +1185,7 @@ impl BibleApp {
             "lookup" => {
                 let (r, at) = arg.split_once('@').unwrap_or((arg, "600,352"));
                 let (x, y) = at.split_once(',').unwrap_or(("600", "352"));
-                self.reader
-                    .set_selection(bible_core::reference::parse(r).map(|r| r.verse_ref()));
+                self.reader.set_selection(bible_core::reference::parse(r).map(|r| r.verse_ref()));
                 let pos = egui::pos2(x.parse().unwrap_or(600.0), y.parse().unwrap_or(352.0));
                 if let Some(word) =
                     crate::lookup_popover::target(&self.reader, &self.library, &self.settings, pos)
