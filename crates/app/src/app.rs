@@ -2926,6 +2926,9 @@ impl eframe::App for BibleApp {
                 None => false,
             };
             if close {
+                if std::env::var("BIBLE_RS_TRACE_POPOVER").is_ok() {
+                    eprintln!("app: dropping the lookup (reader={})", self.pages.reader());
+                }
                 self.lookup = None;
             }
         }

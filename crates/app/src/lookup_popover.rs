@@ -45,6 +45,8 @@ pub struct LookUp {
     view: View,
     /// The dictionary entry behind one of those words, once the reader asks for it.
     entry: Option<original::Entry>,
+    /// The popover's own rect last frame, so a wheel can be told apart from a scroll of the list.
+    last_rect: Option<Rect>,
 }
 
 /// The popover's three faces: the English definition, the verse's original words, and one entry.
@@ -74,7 +76,16 @@ struct Body {
 impl LookUp {
     pub fn new(word: String, reference: String) -> Self {
         let at = bible_core::reference::parse(&reference).map(|r| r.verse_ref());
-        Self { word, reference, at, origin: None, origin_read: false, view: View::Definition, entry: None }
+        Self {
+            word,
+            reference,
+            at,
+            origin: None,
+            origin_read: false,
+            view: View::Definition,
+            entry: None,
+            last_rect: None,
+        }
     }
 
     /// The verse's original words, read the first time anyone looks at this word. Nothing is
@@ -179,9 +190,26 @@ impl LookUp {
         _actions: &mut Vec<Action>,
     ) -> bool {
         if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, Key::Escape)) {
+            if std::env::var("BIBLE_RS_TRACE_POPOVER").is_ok() {
+                eprintln!("closing: escape");
+            }
             return true;
         }
         let screen = ctx.content_rect();
+        // The popover belongs to its word. A wheel over the page — not over the popover, where it
+        // scrolls the word list — means the reader has moved on, and the popover goes with the word
+        // rather than floating over text it no longer describes.
+        let wheel = ctx.input(|i| i.smooth_scroll_delta.x.abs() + i.smooth_scroll_delta.y.abs());
+        if wheel > 0.0 {
+            let over_popover =
+                ctx.pointer_latest_pos().is_some_and(|p| self.last_rect.is_some_and(|r| r.contains(p)));
+            if !over_popover {
+                if std::env::var("BIBLE_RS_TRACE_POPOVER").is_ok() {
+                    eprintln!("closing: the page scrolled under the popover");
+                }
+                return true;
+            }
+        }
         let anchor = anchor(reader).unwrap_or_else(|| crate::note_popover::fallback_anchor(screen));
         // Which face of the popover this frame shows. The verse's own words are read once, and
         // only when the definition face is the one on screen: nothing is unpacked for a lookup that
@@ -246,6 +274,7 @@ impl LookUp {
         let top =
             if downward { anchor.bottom() + 3.0 + BEAK.y } else { anchor.top() - 3.0 - BEAK.y - height };
         let rect = Rect::from_min_size(pos2(left, top), vec2(WIDTH, height));
+        self.last_rect = Some(rect);
 
         // Taken out of `self` for the duration of the frame, so the closure can write to `self`
         // when a row is clicked without fighting the borrow it would otherwise hold.
@@ -471,6 +500,9 @@ impl LookUp {
             self.view = View::Entry;
         }
         // A click anywhere outside closes it, as the note popover already behaves.
+        if std::env::var("BIBLE_RS_TRACE_POPOVER").is_ok() && (close || area.response.clicked_elsewhere()) {
+            eprintln!("closing: close={close} clicked_elsewhere={}", area.response.clicked_elsewhere());
+        }
         close || area.response.clicked_elsewhere()
     }
 }
