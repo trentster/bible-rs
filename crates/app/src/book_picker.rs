@@ -25,12 +25,27 @@ const MAX_NAME: usize = 12;
 /// Width the books leave spare each side of a narrow window when their cells narrow to fit.
 const WINDOW_MARGIN: f32 = 8.0;
 const BOOKS: usize = 66;
+/// The verses of the chapter just chosen: a small cell each, ten to a row, and no more than
+/// `VERSE_ROWS` rows before it scrolls — Psalm 119 holds 176 and would otherwise make a card
+/// taller than the window.
+const VERSE_CELL_HEIGHT: f32 = 24.0;
+const VERSE_ROWS: usize = 8;
+/// The verse block sits on its own faint fill, so nothing in it reads as another chapter.
+const BLOCK_GAP: f32 = 6.0;
+const BLOCK_INSET: f32 = 2.0;
+const BLOCK_PAD: f32 = 7.0;
+const BLOCK_HEADING: f32 = 17.0;
+const BLOCK_RADIUS: f32 = 8.0;
 
 /// Which grid the picker shows and where its highlight is, while it's open.
 #[derive(Clone, Copy, Default)]
 struct State {
     /// The book whose chapters show; `None` shows the books.
     book: Option<BookId>,
+    /// The chapter whose verses show under its grid, once the reader has chosen one. Chosen is not
+    /// the same as read: the jump happens on the choosing, and the verses let a verse be picked
+    /// instead without hunting the page.
+    chapter: Option<u8>,
     cursor: Option<Spot>,
 }
 
@@ -40,6 +55,8 @@ enum Spot {
     Back,
     /// A book (its index) or a chapter (from 0).
     Cell(usize),
+    /// A verse of the chosen chapter (from 0).
+    Verse(usize),
 }
 
 /// Keys the picker reads while open.
@@ -61,6 +78,7 @@ pub fn show(
     anchor: &Response,
     p: &Palette,
     meta: Option<&TranslationMeta>,
+    translation: Option<&bible_core::model::Translation>,
     here: ChapterIdx,
     actions: &mut Vec<Action>,
 ) {
@@ -80,7 +98,7 @@ pub fn show(
             });
             match state.book {
                 None => books(ui, p, meta, here, &keys, &mut state, actions),
-                Some(b) => chapters(ui, p, meta, b, here, &keys, &mut state, actions),
+                Some(b) => chapters(ui, p, meta, translation, b, here, &keys, &mut state, actions),
             }
             ui.data_mut(|d| d.insert_temp(state_id, state));
         });
@@ -119,6 +137,8 @@ fn book_at(col: usize, row: usize) -> Option<usize> {
 fn chapter_step(cursor: Option<Spot>, current: Option<usize>, n: usize, keys: &Keys) -> Spot {
     let from = match (cursor, current) {
         (Some(Spot::Back), _) => return if keys.dy > 0 { Spot::Cell(0) } else { Spot::Back },
+        // The verse block walks its own arrows.
+        (Some(Spot::Verse(_)), _) => return Spot::Cell(current.unwrap_or(0)),
         (Some(Spot::Cell(i)), _) | (None, Some(i)) => i,
         // Nothing highlighted or selected yet: the first chapter.
         (None, None) => return Spot::Cell(0),
@@ -229,6 +249,7 @@ fn books(
         ui.close();
     } else {
         state.book = Some(b);
+        state.chapter = None;
         // From the keyboard, the highlight lands on the chapter being read or the first.
         let ch = if here.book() == b { here.chapter() as usize - 1 } else { 0 };
         state.cursor = by_key.map(|_| Spot::Cell(ch));
@@ -241,6 +262,7 @@ fn chapters(
     ui: &mut Ui,
     p: &Palette,
     meta: Option<&TranslationMeta>,
+    translation: Option<&bible_core::model::Translation>,
     b: BookId,
     here: ChapterIdx,
     keys: &Keys,
@@ -255,7 +277,28 @@ fn chapters(
     let books_label = painter.layout_no_wrap("Books".into(), font, p.ink).size().x;
     let back_width = (icon::MENU + m::ICON_GAP + books_label + 2.0 * m::ITEM_PADDING).ceil();
     let rows = n.div_ceil(CHAPTER_COLUMNS);
-    let size = vec2(CHAPTER_COLUMNS as f32 * cell.x, ITEM_HEIGHT + SEPARATOR_HEIGHT + rows as f32 * cell.y);
+
+    // The verses of the chapter just chosen. Choosing jumps the reader there AND opens these, so a
+    // verse can be picked instead of hunted on the page; the heading names where the jump landed,
+    // because the page itself is behind the card.
+    let chosen = state.chapter.filter(|&c| c > 0 && c as usize <= n);
+    let verses = match (chosen, translation) {
+        (Some(c), Some(t)) => ChapterIdx::new(b, c).map_or(0, |ci| t.last_verse(ci) as usize),
+        _ => 0,
+    };
+    // Every row the chapter has: the block scrolls through them, so the content is all of
+    // them while the block itself shows `VERSE_ROWS` at most.
+    let all_rows = verses.div_ceil(CHAPTER_COLUMNS);
+    let block = (chosen.is_some() && verses > 0).then(|| {
+        vec2(
+            CHAPTER_COLUMNS as f32 * cell.x - 2.0 * BLOCK_INSET,
+            BLOCK_PAD + BLOCK_HEADING + verse_rows(verses) as f32 * VERSE_CELL_HEIGHT + BLOCK_PAD,
+        )
+    });
+    let size = vec2(
+        CHAPTER_COLUMNS as f32 * cell.x,
+        ITEM_HEIGHT + SEPARATOR_HEIGHT + rows as f32 * cell.y + block.map_or(0.0, |b| BLOCK_GAP + b.y),
+    );
     let (area, _) = ui.allocate_exact_size(size, Sense::hover());
     let back = Rect::from_min_size(area.min, vec2(back_width, ITEM_HEIGHT));
     painter.text(
@@ -269,7 +312,7 @@ fn chapters(
     let top = back.bottom() + SEPARATOR_HEIGHT;
 
     let current = (here.book() == b).then(|| here.chapter() as usize - 1);
-    if keys.dx != 0 || keys.dy != 0 {
+    if (keys.dx != 0 || keys.dy != 0) && !matches!(state.cursor, Some(Spot::Verse(_))) {
         state.cursor = Some(chapter_step(state.cursor, current, n, keys));
     }
 
@@ -309,16 +352,35 @@ fn chapters(
             lit: state.cursor == Some(Spot::Cell(i)),
             pressed: resp.is_pointer_button_down_on(),
         };
-        menu::paint_cell(&painter, p, *r, cell);
+        menu::paint_cell(ui.painter(), p, *r, cell);
     }
 
     let enter_back = keys.enter && state.cursor == Some(Spot::Back);
     if back_resp.clicked() || keys.back || enter_back {
         // From the keyboard, the highlight returns to this book.
         let by_key = keys.back || enter_back;
-        *state = State { book: None, cursor: by_key.then_some(Spot::Cell(b.index())) };
+        *state = State { book: None, chapter: None, cursor: by_key.then_some(Spot::Cell(b.index())) };
         return;
     }
+    if let (Some(Spot::Verse(i)), Some(ch)) = (state.cursor, chosen) {
+        let step = keys.dx + keys.dy * CHAPTER_COLUMNS as isize;
+        if step != 0 {
+            let to = (i as isize + step).clamp(0, verses as isize - 1) as usize;
+            state.cursor = Some(Spot::Verse(to));
+        }
+        if keys.back {
+            state.cursor = Some(Spot::Cell(ch as usize - 1));
+            return;
+        }
+        if keys.enter
+            && let Some(ci) = ChapterIdx::new(b, ch)
+        {
+            actions.push(Action::Jump { chapter: ci, verse: Some(i as u8 + 1), flash: true });
+            ui.close();
+            return;
+        }
+    }
+
     let by_key = keys.enter.then(|| match state.cursor {
         Some(Spot::Cell(i)) => i,
         _ => current.unwrap_or(0),
@@ -329,6 +391,92 @@ fn chapters(
             verse: None,
             flash: false,
         });
+        // The card stays open: the chapter is already read, and its verses are one small step on.
+        state.chapter = Some(i as u8 + 1);
+        if by_key.is_some() {
+            state.cursor = Some(Spot::Verse(0));
+        }
+    }
+
+    let Some(block) = block else { return };
+    let Some(ch) = chosen else { return };
+    let rect =
+        Rect::from_min_size(pos2(area.left() + BLOCK_INSET, top + rows as f32 * cell.y + BLOCK_GAP), block);
+    painter.rect_filled(rect, BLOCK_RADIUS, p.fill);
+    painter.text(
+        pos2(rect.left() + m::ITEM_PADDING, rect.top() + BLOCK_PAD),
+        Align2::LEFT_TOP,
+        format!("{} {ch} · VERSE", meta.map_or(b.name(), |m| m.book_short(b)).to_uppercase()),
+        text::CAPTION.font(),
+        p.ink_2,
+    );
+
+    // Keyboard: the arrows walk the verses once the chapter is chosen, backspace returns to the
+    // chapters, return takes the verse.
+    let grid = Rect::from_min_size(
+        pos2(rect.left() + BLOCK_INSET, rect.top() + BLOCK_PAD + BLOCK_HEADING),
+        vec2(rect.width() - 2.0 * BLOCK_INSET, block.y - BLOCK_PAD - BLOCK_HEADING - BLOCK_PAD),
+    );
+    let column = grid.width() / CHAPTER_COLUMNS as f32;
+    let mut child = ui.new_child(egui::UiBuilder::new().max_rect(grid));
+    let mut taken = None;
+    egui::ScrollArea::vertical()
+        .id_salt("verses")
+        .max_height(grid.height())
+        .auto_shrink([false, false])
+        .show(&mut child, |ui| {
+            let content = vec2(grid.width(), all_rows as f32 * VERSE_CELL_HEIGHT);
+            let (content_rect, _) = ui.allocate_exact_size(content, Sense::hover());
+            for i in 0..verses {
+                let r = Rect::from_min_size(
+                    pos2(
+                        content_rect.left() + (i % CHAPTER_COLUMNS) as f32 * column,
+                        content_rect.top() + (i / CHAPTER_COLUMNS) as f32 * VERSE_CELL_HEIGHT,
+                    ),
+                    vec2(column, VERSE_CELL_HEIGHT),
+                );
+                let resp = cell_response(ui, r, ui.id().with(("verse", i)), &(i + 1).to_string(), false);
+                let lit = state.cursor == Some(Spot::Verse(i));
+                let wax = resp.is_pointer_button_down_on() || lit;
+                if wax {
+                    ui.painter().rect_filled(r, m::ITEM_RADIUS, p.fill_strong);
+                }
+                ui.painter().text(
+                    r.center(),
+                    Align2::CENTER_CENTER,
+                    (i + 1).to_string(),
+                    text::SMALL.font(),
+                    if wax { p.ink } else { p.ink_2 },
+                );
+                if resp.clicked() {
+                    taken = Some(i);
+                }
+            }
+        });
+    if let (Some(i), Some(ci)) = (taken, ChapterIdx::new(b, ch)) {
+        actions.push(Action::Jump { chapter: ci, verse: Some(i as u8 + 1), flash: true });
         ui.close();
+    }
+}
+
+/// How many rows of verses a chosen chapter shows: all of them, up to the cap, and the rest
+/// scroll. Psalm 119 is the reason for the cap — 176 verses would otherwise be an eighteen-row
+/// card taller than the window.
+fn verse_rows(verses: usize) -> usize {
+    verses.div_ceil(CHAPTER_COLUMNS).min(VERSE_ROWS)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_chosen_chapter_shows_its_verses_up_to_the_cap() {
+        assert_eq!(verse_rows(0), 0);
+        assert_eq!(verse_rows(1), 1);
+        assert_eq!(verse_rows(46), 5); // Matthew 22
+        assert_eq!(verse_rows(51), 6); // Matthew 24
+        assert_eq!(verse_rows(80), VERSE_ROWS); // exactly the cap
+        assert_eq!(verse_rows(176), VERSE_ROWS); // Psalm 119 stops at it and scrolls
     }
 }

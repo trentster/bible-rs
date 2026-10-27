@@ -1789,7 +1789,8 @@ impl BibleApp {
             vec2(translation.width(), CAPSULE_HEIGHT),
         );
         let loc = book.show(ui, book_rect, p, "book", "Jump to a book or chapter (⌘K)");
-        crate::book_picker::show(&loc, p, tmeta.as_ref(), c, actions);
+        let reading = self.library.load(&self.settings.translation).ok();
+        crate::book_picker::show(&loc, p, tmeta.as_ref(), reading.as_deref(), c, actions);
         if show_translation {
             widgets::capsule_divider(ui.painter(), book_rect.right(), cy, p);
             let tr = translation.show(ui, tr_rect, p, "translation", "Translation (⌘1…⌘9)");
