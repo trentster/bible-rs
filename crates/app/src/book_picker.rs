@@ -276,6 +276,9 @@ fn chapters(
     let cell = vec2((digits + 2.0 * m::ITEM_PADDING).ceil(), ITEM_HEIGHT);
     let books_label = painter.layout_no_wrap("Books".into(), font, p.ink).size().x;
     let back_width = (icon::MENU + m::ICON_GAP + books_label + 2.0 * m::ITEM_PADDING).ceil();
+    // The card is as wide as this grid, not as wide as the books grid it came from: a chapter
+    // grid narrower than the card leaves a strip of empty menu down the right side.
+    ui.set_width(CHAPTER_COLUMNS as f32 * cell.x);
     let rows = n.div_ceil(CHAPTER_COLUMNS);
 
     // The verses of the chapter just chosen. Choosing jumps the reader there AND opens these, so a
