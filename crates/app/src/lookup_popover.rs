@@ -228,18 +228,24 @@ impl LookUp {
                 text_height += 10.0;
             }
         }
+        // Where the popover can hang, measured before its height: a cap that ignores the anchor
+        // lets the foot of the popover — and the end of a long list — run past the screen edge,
+        // where it cannot be scrolled to.
+        let below = screen.bottom() - (anchor.bottom() + 3.0 + BEAK.y) - 16.0;
+        let above = anchor.top() - 3.0 - BEAK.y - (screen.top() + 52.0) - 8.0;
+        let chrome = 64.5 + 14.0 + 14.0 + foot + search_height + offer;
         // A long entry scrolls rather than growing the popover off the screen. A list of words is
         // allowed more of the screen: it is a list, and half a verse's words is worse than none.
         let share = if showing == View::Words { 0.62 } else { 0.42 };
-        let cap = (screen.height() * share).max(80.0);
         let list_height = self.origin.as_ref().map_or(0.0, |v| v.words.len() as f32 * WORD_ROW);
         let natural = if showing == View::Words { list_height } else { text_height };
+        // The body gets whatever is left of the better side, never more than its share of the
+        // screen, so the foot of the popover always lands inside the window.
+        let room = below.max(above) - chrome;
+        let cap = (screen.height() * share).min(room).max(80.0);
         let body_height = natural.min(cap);
-        let chrome = 64.5 + 14.0 + 14.0 + foot + search_height + offer;
         let height = chrome + body_height;
 
-        let below = screen.bottom() - (anchor.bottom() + 3.0 + BEAK.y) - 16.0;
-        let above = anchor.top() - 3.0 - BEAK.y - (screen.top() + 52.0) - 8.0;
         let downward = below >= height || below >= above;
         let left =
             (anchor.center().x - WIDTH / 2.0).clamp(screen.left() + 12.0, screen.right() - 12.0 - WIDTH);
