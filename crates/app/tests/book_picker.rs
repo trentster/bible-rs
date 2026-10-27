@@ -25,7 +25,7 @@ fn open_in(size: egui::Vec2) -> Harness<'static, Vec<Action>> {
     let mut harness = Harness::builder().with_size(size).build_ui_state(
         move |ui, actions: &mut Vec<Action>| {
             let anchor = ui.button("John 1");
-            book_picker::show(&anchor, Theme::Light.palette(), None, here, actions);
+            book_picker::show(&anchor, Theme::Light.palette(), None, None, here, actions);
         },
         Vec::new(),
     );
@@ -131,4 +131,51 @@ fn the_current_chapter_is_selected_and_escape_closes() {
     harness.get_by_label("John 1").click();
     harness.run();
     assert!(harness.query_by_label("Genesis").is_some());
+}
+
+/// The picker with the text it reads from, so a chosen chapter can offer its verses.
+fn open_with_text() -> Harness<'static, Vec<Action>> {
+    let here = ChapterIdx::new(JOHN, 1).unwrap();
+    let text = bible_core::bundled::load("kjv").expect("the bundled KJV");
+    let mut harness = Harness::builder().with_size(egui::vec2(1280.0, 800.0)).build_ui_state(
+        move |ui, actions: &mut Vec<Action>| {
+            let anchor = ui.button("John 1");
+            book_picker::show(&anchor, Theme::Light.palette(), None, Some(&text), here, actions);
+        },
+        Vec::new(),
+    );
+    harness.ctx.set_fonts(theme::font_definitions());
+    theme::apply(&harness.ctx, Theme::Light);
+    harness.run();
+    harness.get_by_label("John 1").click();
+    harness.run();
+    assert!(book_picker::is_open(&harness.ctx));
+    harness
+}
+
+#[test]
+fn a_chosen_chapter_offers_its_verses_without_leaving_the_book() {
+    let mut harness = open_with_text();
+    harness.get_by_label("Matthew").click();
+    harness.run();
+    harness.get_by_label("22").click();
+    harness.run();
+    // The chapter is read, and the card stays for the verses that follow it.
+    assert_eq!(
+        *harness.state(),
+        vec![Action::Jump { chapter: ChapterIdx::new(BookId(39), 22).unwrap(), verse: None, flash: false }]
+    );
+    assert!(book_picker::is_open(&harness.ctx), "the card stays open for the verses");
+    // Matthew 22 has 46 verses, so 35 is on the card, and choosing it takes the reader there.
+    harness.get_by_label("35").click();
+    harness.run();
+    assert_eq!(
+        harness.state().last(),
+        Some(&Action::Jump {
+            chapter: ChapterIdx::new(BookId(39), 22).unwrap(),
+            verse: Some(35),
+            flash: true
+        })
+    );
+    assert!(!book_picker::is_open(&harness.ctx), "choosing a verse closes it");
 }

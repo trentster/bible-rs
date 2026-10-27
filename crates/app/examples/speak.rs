@@ -37,7 +37,12 @@ fn main() -> anyhow::Result<()> {
     let book = std::env::var("SPEAK_BOOK").unwrap_or_else(|_| "Hebrews".to_string());
     let number: u32 = std::env::var("SPEAK_CHAPTER").ok().and_then(|v| v.parse().ok()).unwrap_or(7);
     let script = if verses.is_empty() {
-        vec![bible_core::speak::Utterance { text: text.trim().to_string(), pause_ms: 0, verse: None }]
+        vec![bible_core::speak::Utterance {
+            text: text.trim().to_string(),
+            pause_ms: 0,
+            verse: None,
+            until: None,
+        }]
     } else {
         bible_core::speak::chapter(&book, number, &verses)
     };

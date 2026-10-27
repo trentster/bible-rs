@@ -395,9 +395,16 @@ fn chapters(
             flash: false,
         });
         // The card stays open: the chapter is already read, and its verses are one small step on.
+        // With no text to draw them from — no translation, an empty chapter — there is nothing to
+        // stay open for, so it closes as it always did.
+        let count = ChapterIdx::new(b, i as u8 + 1)
+            .map_or(0, |c| translation.map_or(0, |t| t.last_verse(c) as usize));
         state.chapter = Some(i as u8 + 1);
         if by_key.is_some() {
             state.cursor = Some(Spot::Verse(0));
+        }
+        if count == 0 {
+            ui.close();
         }
     }
 

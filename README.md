@@ -38,6 +38,14 @@ Beyond upstream: **study tools and a voice**, all of them offline.
   follow, with a switch in Settings for readers who find it distracting. The voice also follows the
   page: navigate to another chapter and the reading stops rather than talking over what you're
   looking at.
+- **Straight to a verse** — pick a book, tap a chapter, and that chapter's verses appear in the card
+  under it: tap one and you land on it, highlighted. Choosing the chapter already takes you there,
+  so a chapter-only reader pays nothing for the extra step.
+- **The original words behind a verse** — the word popover ends with one quiet row: the Hebrew,
+  Aramaic or Greek behind the verse, which language it is, and the words in order. Tap the row for
+  the list, then a word for its lexicon entry. Translations from
+  [STEPBible](https://github.com/STEPBible/STEPBible-Data) (CC BY 4.0), bundled — 31,094 of the
+  31,102 verses, 4 MB compressed, read only when the row is opened.
 - **The voice arrives when you ask for it** — 62 MB of [Phonon-31m](https://huggingface.co/gradium/phonon-31m-en)
   (Apache-2.0) downloads once from this repository's
   [`speech-1` release](https://github.com/trentster/bible-rs/releases/tag/speech-1), each file checked
@@ -54,6 +62,7 @@ Download the latest build from [Releases](https://github.com/trentster/bible-rs/
 <td><img src="docs/screenshots/read-aloud-timer.png" alt="The playback bar over Psalm 23 with pause, the reading position, a 15-minute countdown, and the stop-after menu"></td>
 </tr>
 <tr>
+<td><img src="docs/screenshots/verse-picker.png" alt="The book card with Matthew's chapters and, under them, a VERSE band listing chapter 22's verses"></td>
 <td><img src="docs/screenshots/read-aloud-tint.png" alt="Psalm 23 with the sentence being read tinted across verses 1 and 2"></td>
 <td><img src="docs/screenshots/lookup.png" alt="Looking up the word shepherd in Psalm 23: senses from WordNet in a popover anchored to the word"></td>
 </tr>
