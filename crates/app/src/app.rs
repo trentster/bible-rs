@@ -749,6 +749,14 @@ impl BibleApp {
                     // rather than going on in your ears in the version you just left.
                     #[cfg(feature = "speak")]
                     self.listen.stop();
+                    // The place you are reading is a verse, not a pixel: the new translation lays
+                    // the page out differently, so hold the highlighted verse in front of you
+                    // instead of leaving it above or below the fold.
+                    if let Some(v) = self.reader.selected_refs().first().copied()
+                        && let Some(c) = bible_core::books::ChapterIdx::new(v.book, v.chapter)
+                    {
+                        self.reader.jump(c, Some(v.verse), false);
+                    }
                 }
             }
             Action::TranslationNumber(n) => {
@@ -1162,6 +1170,14 @@ impl BibleApp {
             }
             // `wait`: hold a frame, so a later step sees the page settled.
             "wait" => {}
+            // `scroll:<dy>`: the reader scrolled, as a wheel or trackpad does.
+            "scroll" => {
+                self.reader.scroll_by(arg.trim().parse().unwrap_or(0.0));
+            }
+            // `translation:<id>`: switch version, as the toolbar's translation menu does.
+            "translation" => {
+                self.apply_one(ctx, Action::SetTranslation(arg.trim().to_string()));
+            }
             // `follow:<verse>`: the page following the voice, as it does while a chapter is read.
             // The time is pushed forward past the yield, because a demo has no frames to wait.
             #[cfg(feature = "speak")]
