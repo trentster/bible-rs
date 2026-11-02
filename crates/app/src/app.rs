@@ -642,6 +642,7 @@ impl BibleApp {
             key(Modifiers::NONE, Key::PageUp, Action::ScrollPages(-1.0));
             key(Modifiers::SHIFT, Key::Space, Action::ScrollPages(-1.0));
             key(Modifiers::NONE, Key::Space, Action::ScrollPages(1.0));
+            key(Modifiers::NONE, Key::R, Action::ShowRelated);
             key(Modifiers::NONE, Key::J, Action::SelectNext);
             key(Modifiers::NONE, Key::K, Action::SelectPrev);
             key(Modifiers::NONE, Key::Escape, Action::ClearSelection);
