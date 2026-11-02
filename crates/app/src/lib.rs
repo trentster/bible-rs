@@ -16,6 +16,7 @@ pub mod lookup_popover;
 pub mod macos_menu;
 #[cfg(target_os = "macos")]
 pub mod macos_window;
+pub mod related_popover;
 /// This platform's native menu bar.
 #[cfg(target_os = "macos")]
 pub use macos_menu as menu_bar;

@@ -19,6 +19,7 @@ pub mod online;
 pub mod original;
 pub mod plans;
 pub mod reference;
+pub mod related;
 pub mod search;
 #[cfg(feature = "native")]
 pub mod secrets;

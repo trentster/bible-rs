@@ -318,6 +318,7 @@ pub struct BibleApp {
     /// Compare Verse as a popover on the selected verse (frame 23).
     compare: Option<crate::compare_popover::ComparePopover>,
     lookup: Option<crate::lookup_popover::LookUp>,
+    related: Option<crate::related_popover::Related>,
     /// Read aloud: the chapter being spoken, and the bar that shows it.
     #[cfg(feature = "speak")]
     listen: crate::read_aloud::Listen,
@@ -461,6 +462,7 @@ impl BibleApp {
             share_sheet: None,
             compare: None,
             lookup: None,
+            related: None,
             #[cfg(feature = "speak")]
             listen: crate::read_aloud::Listen::new(),
             reminded: None,
@@ -854,6 +856,11 @@ impl BibleApp {
                 let v = self.selection_or_location()[0];
                 self.apply_one(ctx, Action::EditNote(v));
             }
+            Action::ShowRelated => {
+                let v = self.selection_or_location()[0];
+                self.related =
+                    Some(crate::related_popover::Related::new(v, v.to_string(), self.reader.clicked_text()));
+            }
             Action::PinBook(b) => self.settings.pin_book(b),
             Action::UnpinBook(b) => self.settings.unpin_book(b),
             Action::ToggleBookmark => {
@@ -1222,6 +1229,18 @@ impl BibleApp {
                     let mut look = crate::lookup_popover::LookUp::new(word, r.to_string()).anchored(at);
                     look.show_words();
                     self.lookup = Some(look);
+                }
+            }
+            // `related:<reference>[@x,y]`: the related-verses card, as R opens it.
+            "related" => {
+                let (r, at) = arg.split_once('@').unwrap_or((arg, "600,352"));
+                let (x, y) = at.split_once(',').unwrap_or(("600", "352"));
+                if let Some(parsed) = bible_core::reference::parse(r) {
+                    let v = parsed.verse_ref();
+                    self.reader.set_selection(Some(v));
+                    let pos = egui::pos2(x.parse().unwrap_or(600.0), y.parse().unwrap_or(352.0));
+                    let at = self.reader.text_pos(pos);
+                    self.related = Some(crate::related_popover::Related::new(v, v.to_string(), at));
                 }
             }
             "menu" => {
@@ -2952,6 +2971,18 @@ impl eframe::App for BibleApp {
                     eprintln!("app: dropping the lookup (reader={})", self.pages.reader());
                 }
                 self.lookup = None;
+            }
+        }
+        if self.related.is_some() {
+            let reading = self.library.load(&self.settings.translation).ok();
+            let close = match &mut self.related {
+                Some(r) => {
+                    !self.pages.reader() || r.show(&ctx, p, &self.reader, reading.as_deref(), &mut actions)
+                }
+                None => false,
+            };
+            if close {
+                self.related = None;
             }
         }
         let current = self.verse_menu.as_ref().and_then(|_| self.selection_color());

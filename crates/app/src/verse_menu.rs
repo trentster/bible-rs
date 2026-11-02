@@ -55,6 +55,7 @@ impl VerseMenu {
             items.push(item(icons::text_cursor, "Look Up", "⌃⌘D", Some(Action::LookUpWord)));
             items.push(Line::Separator);
         }
+        items.push(item(icons::link, "Related Verses…", "R", Some(Action::ShowRelated)));
         items.extend([
             item(
                 icons::note,

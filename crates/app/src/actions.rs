@@ -36,6 +36,8 @@ pub enum Action {
     Highlight(Option<HighlightColor>),
     EditNote(VerseRef),
     EditSelectedNote,
+    /// Show the verses the tradition links to the selected one.
+    ShowRelated,
     ToggleBookmark,
     /// Pin a book above the testaments in the sidebar, or unpin it.
     PinBook(bible_core::BookId),
