@@ -50,6 +50,17 @@ conversion writes. Terms, verbatim licence statements and the archive hashes are
 The spelling table in `data/lexicon/aliases.tsv` is the project's own editorial data (see
 `dictionaries.md`), not part of any dictionary.
 
+## Bundled cross references — CC BY 4.0
+
+Converted at build time from [OpenBible.info's cross-reference set](https://www.openbible.info/labs/cross-references/)
+by `scripts/build-related.py`, which keeps the eight best-voted links per verse and drops links the
+site's readers voted down. The links draw mostly on the public-domain **Treasury of Scripture
+Knowledge**; the vote counts that order them are OpenBible.info's own. 193,447 links in 0.75 MB of
+zstd, compared against the archive's live content at build time. The site states: *"Unless otherwise
+indicated, all content is licensed under a Creative Commons Attribution License"* (CC BY 4.0; legal
+code in [`CC-BY-4.0.txt`](CC-BY-4.0.txt)). It is credited in the card itself —
+"OpenBible.info cross references, CC BY 4.0" — and in the README.
+
 ## Fonts — SIL Open Font License 1.1
 
 | Font | Use | Source | Licence |

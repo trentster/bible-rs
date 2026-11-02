@@ -46,6 +46,12 @@ Beyond upstream: **study tools and a voice**, all of them offline.
   the list, then a word for its lexicon entry. Translations from
   [STEPBible](https://github.com/STEPBible/STEPBible-Data) (CC BY 4.0), bundled — 31,094 of the
   31,102 verses, 4 MB compressed, read only when the row is opened.
+- **Related verses** — right-click a verse (or press **R**) and a card lists the verses the reading
+  tradition links to it, best first, each with its opening words in the translation you are in: pick
+  one and you land there. From [OpenBible.info](https://www.openbible.info/labs/cross-references/)
+  (CC BY 4.0), which draws mostly on the public-domain Treasury of Scripture Knowledge. 193,447
+  links, top eight per verse, **0.75 MB** compressed, read only when a card is opened. Links the
+  site's readers voted down are left out, so 43 verses offer nothing at all.
 - **The voice arrives when you ask for it** — 62 MB of [Phonon-31m](https://huggingface.co/gradium/phonon-31m-en)
   (Apache-2.0) downloads once from this repository's
   [`speech-1` release](https://github.com/trentster/bible-rs/releases/tag/speech-1), each file checked
