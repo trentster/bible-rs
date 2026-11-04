@@ -702,3 +702,20 @@ What this cost, stated plainly:
   `crates/app/tests/settings_fallback.rs`.
 - **Existing keychain entries were left alone.** Nothing deletes a reader's saved keys; the app
   simply has no code that could read one.
+
+## The one request needs a TLS stack, and that was nearly missed
+
+Removing the online translations took `ureq` and its rustls feature out of `bible-core`. The app
+still had `ureq` for the voice download, but with `default-features = false` — and ureq's default
+features are exactly `rustls` and `gzip`. So the build fetched nothing that could speak TLS.
+
+The blocked-network test could not see it: with the network denied the download is *supposed* to
+fail. Running it for real found it in under a second — `TLS required, but transport is unsecured`.
+
+The fix is the minimum: `ureq = { features = ["rustls"] }` in `crates/app`, and nothing in
+`bible-core`. Verified end to end on 4 November 2026 with a release build and an empty data
+folder: eight files fetched and checked in 18.5 s, `installed()` true, then Read Aloud synthesised
+6.8 s of speech in 0.50 s (13.5× realtime) from that downloaded voice.
+
+`crates/app/examples/voice-check.rs` is the check, so the next person can run it rather than reason
+about it. **A network-denied test proves nothing about TLS; only a real download does.**

@@ -28,7 +28,10 @@ required-features = ["speak"]
 bible-core = { workspace = true, default-features = true }
 # HTTPS and SHA-256: the Windows updater, and the one-time voice download every platform makes.
 sha2 = "0.10"
-ureq = { version = "3", default-features = false }
+# The voice download is the app's only HTTP request, and it is HTTPS-only: without a TLS stack here
+# the install fails at runtime with "TLS required, but transport is unsecured". rustls is that
+# stack, and nothing else in the build pulls one in (bible-core has no HTTP client at all).
+ureq = { version = "3", default-features = false, features = ["rustls"] }
 anyhow.workspace = true
 serde.workspace = true
 serde_json.workspace = true

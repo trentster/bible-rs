@@ -13,9 +13,11 @@ use bible_core::books::{BOOKS, CHAPTER_COUNT, FIRST_NT_BOOK};
 use bible_core::content::{self, ContentOptions};
 use bible_core::highlight::{chars_from_utf16, utf16_from_chars};
 use bible_core::model::{Translation, TranslationMeta};
+#[cfg(feature = "nlt")]
+use bible_core::nlt_html;
 use bible_core::search::{Query, Scope};
 use bible_core::study::{HighlightColor, Include, ReadingSession, StudyStore, TextSpan};
-use bible_core::{BookId, ChapterIdx, VerseRef, bundled, format, nlt_html, plans};
+use bible_core::{BookId, ChapterIdx, VerseRef, bundled, format, plans};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
@@ -333,6 +335,7 @@ impl Bible {
     /// Keeps one chapter of the NLT, read from the HTML Tyndale's API returned (through the site's
     /// `/api/nlt`), in place of any chapter of it kept before: Tyndale's terms allow quoting up to
     /// 500 verses and never a whole book, so the page holds one chapter at a time and stores none.
+    #[cfg(feature = "nlt")]
     #[wasm_bindgen(js_name = loadNlt)]
     pub fn load_nlt(&mut self, index: u16, html: &str) -> Result<JsValue, JsError> {
         let c = chapter_idx(index);
