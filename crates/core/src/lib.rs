@@ -14,16 +14,18 @@ pub mod lexicon;
 #[cfg(feature = "native")]
 pub mod library;
 pub mod model;
+// The browser reader parses the NLT API's HTML with this. Nothing else does, so it is behind a
+// feature only that reader turns on: the Mac and phone builds have no online translations, and
+// carry none of this.
+#[cfg(feature = "nlt")]
 pub mod nlt_html;
 #[cfg(feature = "native")]
-pub mod online;
 pub mod original;
 pub mod plans;
 pub mod reference;
 pub mod related;
 pub mod search;
 #[cfg(feature = "native")]
-pub mod secrets;
 pub mod speak;
 pub mod study;
 pub mod sync;

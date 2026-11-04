@@ -3,12 +3,9 @@
 //! renders offscreen (screenshots) it fills the main window instead.
 
 use std::path::PathBuf;
-use std::sync::mpsc::Sender;
 
 use bible_core::library::{EntryKind, Library};
 use bible_core::model::Origin;
-use bible_core::online::apibible::RemoteBible;
-use bible_core::online::{OnlineConfig, ProviderKind};
 use bible_core::study::StudyStore;
 use eframe::egui::text::{LayoutJob, TextFormat, TextWrapping};
 use eframe::egui::{
@@ -16,7 +13,7 @@ use eframe::egui::{
 };
 
 use crate::actions::{Action, ExportKind, SettingsTab};
-use crate::app::{Settings, TaskResult};
+use crate::app::Settings;
 use crate::icons;
 use crate::reader::layout::{Mode, Typography};
 use crate::theme::{self, Palette, Theme, text};
@@ -42,13 +39,6 @@ const TABS: [(SettingsTab, &str, IconFn); 7] = [
 
 pub struct SettingsUi {
     tab: SettingsTab,
-    esv_key: String,
-    nlt_key: String,
-    apibible_key: String,
-    bibles: Option<Result<Vec<RemoteBible>, String>>,
-    loading_bibles: bool,
-    bible_filter: String,
-    message: Option<String>,
     /// Every bundled translation in the Installed list, rather than the reading ones.
     show_all_bundled: bool,
     /// Shortcuts: the filter, and the row waiting for a new chord.
@@ -59,26 +49,14 @@ pub struct SettingsUi {
 }
 
 impl SettingsUi {
-    pub fn new(tab: SettingsTab, library: &Library) -> Self {
+    pub fn new(tab: SettingsTab) -> Self {
         Self {
             tab,
-            esv_key: library.api_key("esv-api-key").unwrap_or_default(),
-            nlt_key: library.api_key("nlt-api-key").unwrap_or_default(),
-            apibible_key: library.api_key("api-bible-key").unwrap_or_default(),
-            bibles: None,
-            loading_bibles: false,
-            bible_filter: String::new(),
-            message: None,
             show_all_bundled: false,
             shortcut_filter: String::new(),
             recording: None,
             confirm_erase: false,
         }
-    }
-
-    pub fn bibles_loaded(&mut self, r: Result<Vec<RemoteBible>, String>) {
-        self.loading_bibles = false;
-        self.bibles = Some(r);
     }
 
     /// Shortcuts (frame 26): every shortcut by group; a row that does one thing takes a new
@@ -505,7 +483,6 @@ impl SettingsUi {
         settings: &mut Settings,
         study: &StudyStore,
         actions: &mut Vec<Action>,
-        tx: &Sender<TaskResult>,
         import: &mut Option<(PathBuf, Option<String>)>,
     ) -> bool {
         if crate::offscreen() {
@@ -517,7 +494,7 @@ impl SettingsUi {
                 .show(ctx, |ui| {
                     ui.set_min_size(screen.size());
                     let mut child = ui.new_child(egui::UiBuilder::new().max_rect(screen));
-                    self.window(&mut child, library, settings, study, actions, tx, import);
+                    self.window(&mut child, library, settings, study, actions, import);
                 });
             return true;
         }
@@ -544,7 +521,7 @@ impl SettingsUi {
             }
             let rect = ui.max_rect();
             let mut child = ui.new_child(egui::UiBuilder::new().max_rect(rect));
-            self.window(&mut child, library, settings, study, actions, tx, import);
+            self.window(&mut child, library, settings, study, actions, import);
         });
         open
     }
@@ -558,7 +535,6 @@ impl SettingsUi {
         settings: &mut Settings,
         study: &StudyStore,
         actions: &mut Vec<Action>,
-        tx: &Sender<TaskResult>,
         import: &mut Option<(PathBuf, Option<String>)>,
     ) {
         let p = settings.theme.palette();
@@ -635,7 +611,7 @@ impl SettingsUi {
                             SettingsTab::ReadAloud => read_aloud(ui, settings),
                             SettingsTab::Appearance => appearance(ui, settings, actions),
                             SettingsTab::Translations => {
-                                self.translations(ui, library, settings, actions, tx, import)
+                                self.translations(ui, library, settings, actions, import)
                             }
                             SettingsTab::Shortcuts => self.shortcuts(ui, settings),
                             SettingsTab::Data => self.data(ui, library, settings, study, actions),
@@ -646,16 +622,14 @@ impl SettingsUi {
         );
     }
 
-    /// Translations (frame 25): the default and parallel set, what's installed, importing a
-    /// translation you own, and API keys for online ones.
-    #[allow(clippy::too_many_arguments)]
+    /// Translations (frame 25): the default and parallel set, what's installed, and importing a
+    /// translation you own.
     fn translations(
         &mut self,
         ui: &mut Ui,
         library: &mut Library,
         settings: &mut Settings,
         actions: &mut Vec<Action>,
-        tx: &Sender<TaskResult>,
         import: &mut Option<(PathBuf, Option<String>)>,
     ) {
         let p = settings.theme.palette();
@@ -831,13 +805,6 @@ impl SettingsUi {
                                 .unwrap_or_default();
                             format!("{format} · {size}")
                         }
-                        EntryKind::Online(o) => {
-                            format!(
-                                "{} · {} verses cached",
-                                o.config.provider.host(),
-                                library.cached_verses(&m.id)
-                            )
-                        }
                     };
                     let tx0 = tile.right() + 12.0;
                     // Trailing: Remove (not for bundled), then the badges, right to left.
@@ -858,7 +825,6 @@ impl SettingsUi {
                     let mut badges = vec![match e.kind {
                         EntryKind::Bundled(_) => (widgets::BadgeKind::Neutral, "Bundled"),
                         EntryKind::Imported(_) => (widgets::BadgeKind::Accent, "Imported"),
-                        EntryKind::Online(_) => (widgets::BadgeKind::Success, "Online"),
                     }];
                     if default {
                         badges.push((widgets::BadgeKind::Solid, "Default"));
@@ -939,303 +905,6 @@ impl SettingsUi {
                 ". Copyrighted translations are never bundled."
             ),
         );
-        ui.add_space(24.0);
-
-        // Online translations: the publishers' own APIs.
-        group_title(ui, p, "Online translations");
-        let esv_saved = library.api_key("esv-api-key").unwrap_or_default();
-        let nlt_saved = library.api_key("nlt-api-key").unwrap_or_default();
-        let bible_saved = library.api_key("api-bible-key").unwrap_or_default();
-        let added = |kind: &ProviderKind| {
-            library.entries().iter().any(|e| e.online().is_some_and(|o| o.config.provider == *kind))
-        };
-        let (has_esv, has_nlt, has_net) =
-            (added(&ProviderKind::Esv), added(&ProviderKind::Nlt), added(&ProviderKind::Net));
-        let mut esv_clicked = false;
-        let mut nlt_clicked = false;
-        let mut add_net = false;
-        let mut save_bible = false;
-        let mut list_bibles = false;
-        rows_card(ui, p, &[56.0, 56.0, 56.0, 56.0, 48.0], |ui, i, r| {
-            let right = r.right() - 16.0;
-            let cy = r.center().y;
-            let field_at = |x: f32| Rect::from_min_size(pos2(x - 10.0 - 220.0, cy - 16.0), vec2(220.0, 32.0));
-            match i {
-                0 => {
-                    row_label(ui, p, r, "ESV (Crossway)", Some("api.esv.org · free key, non-commercial"));
-                    // Without a key: where to get one. A pasted key adds the ESV in one click.
-                    let trailing = if self.esv_key.trim() != esv_saved {
-                        Trailing::Button(Kind::Primary, if has_esv { "Save" } else { "Add ESV" })
-                    } else if esv_saved.is_empty() {
-                        Trailing::Button(Kind::Secondary, "Get Free Key…")
-                    } else if !has_esv {
-                        Trailing::Button(Kind::Primary, "Add ESV")
-                    } else {
-                        Trailing::Badge("Connected")
-                    };
-                    let get_key = matches!(trailing, Trailing::Button(_, "Get Free Key…"));
-                    let (x, clicked) = trailing.show(ui, p, right, cy, "esv");
-                    if clicked && get_key {
-                        crate::app::open_url(bible_core::online::esv::SIGN_UP_URL);
-                    } else {
-                        esv_clicked = clicked;
-                    }
-                    key_field(
-                        ui,
-                        p,
-                        field_at(x),
-                        &mut self.esv_key,
-                        "Paste your ESV API key",
-                        egui::Id::new("esv-key"),
-                    );
-                }
-                1 => {
-                    row_label(ui, p, r, "NLT (Tyndale)", Some("api.nlt.to · free, no key needed"));
-                    let trailing = if !has_nlt {
-                        Trailing::Button(Kind::Primary, "Add NLT")
-                    } else if self.nlt_key.trim() != nlt_saved {
-                        Trailing::Button(Kind::Primary, "Save")
-                    } else {
-                        Trailing::Badge("Added")
-                    };
-                    let (x, clicked) = trailing.show(ui, p, right, cy, "nlt");
-                    nlt_clicked = clicked;
-                    key_field(
-                        ui,
-                        p,
-                        field_at(x),
-                        &mut self.nlt_key,
-                        "Optional key (higher limits)",
-                        egui::Id::new("nlt-key"),
-                    );
-                }
-                2 => {
-                    row_label(
-                        ui,
-                        p,
-                        r,
-                        "NET Bible (bible.org)",
-                        Some("labs.bible.org · free, no key needed"),
-                    );
-                    let trailing = if has_net {
-                        Trailing::Badge("Added")
-                    } else {
-                        Trailing::Button(Kind::Primary, "Add NET")
-                    };
-                    add_net = trailing.show(ui, p, right, cy, "net").1;
-                }
-                3 => {
-                    row_label(ui, p, r, "API.Bible", Some("scripture.api.bible · your own key"));
-                    let trailing = if self.apibible_key != bible_saved {
-                        Trailing::Button(Kind::Primary, "Save")
-                    } else if !bible_saved.is_empty() {
-                        Trailing::Badge("Connected")
-                    } else {
-                        Trailing::None
-                    };
-                    let (x, clicked) = trailing.show(ui, p, right, cy, "bible");
-                    save_bible = clicked;
-                    key_field(
-                        ui,
-                        p,
-                        field_at(x),
-                        &mut self.apibible_key,
-                        "API.Bible key",
-                        egui::Id::new("api-bible-key"),
-                    );
-                }
-                _ => {
-                    row_label(ui, p, r, "Available with your API.Bible key", None);
-                    let label = if self.loading_bibles { "Listing…" } else { "List My Bibles…" };
-                    let enabled = !self.loading_bibles && !self.apibible_key.trim().is_empty();
-                    let (_, resp) = Button::new(Kind::Secondary, label)
-                        .small()
-                        .icon(icons::list)
-                        .enabled(enabled)
-                        .show_right(ui, p, right, cy, ui.id().with("list-bibles"));
-                    list_bibles = resp.clicked();
-                }
-            }
-        });
-        // At most one is clicked per frame.
-        let mut add: Option<OnlineConfig> = None;
-        if esv_clicked {
-            let saved = library.set_api_key("esv-api-key", &self.esv_key);
-            self.message = saved.as_ref().err().map(|e| format!("Couldn't save the key: {e:#}"));
-            // Without its key the ESV couldn't load, so it's only added once the key is saved.
-            if saved.is_ok() && !has_esv && !self.esv_key.trim().is_empty() {
-                let cfg = OnlineConfig {
-                    id: "esv".into(),
-                    abbrev: "ESV".into(),
-                    name: "English Standard Version".into(),
-                    provider: ProviderKind::Esv,
-                    copyright: bible_core::online::esv::COPYRIGHT.into(),
-                };
-                add = Some(cfg);
-            }
-        }
-        if nlt_clicked {
-            if self.nlt_key.trim() != nlt_saved
-                && let Err(e) = library.set_api_key("nlt-api-key", &self.nlt_key)
-            {
-                self.message = Some(format!("Couldn't save the key: {e:#}"));
-            }
-            if !has_nlt {
-                let cfg = OnlineConfig {
-                    id: "nlt".into(),
-                    abbrev: "NLT".into(),
-                    name: "New Living Translation".into(),
-                    provider: ProviderKind::Nlt,
-                    copyright: bible_core::online::nlt::COPYRIGHT.into(),
-                };
-                add = Some(cfg);
-            }
-        }
-        if add_net {
-            add = Some(OnlineConfig {
-                id: "net".into(),
-                abbrev: "NET".into(),
-                name: "NET Bible".into(),
-                provider: ProviderKind::Net,
-                copyright: bible_core::online::net::COPYRIGHT.into(),
-            });
-        }
-        if let Some(cfg) = add {
-            match library.add_online(cfg) {
-                Ok(id) => actions.push(Action::SetTranslation(id)),
-                Err(e) => self.message = Some(format!("{e:#}")),
-            }
-        }
-        if save_bible {
-            match library.set_api_key("api-bible-key", &self.apibible_key) {
-                Ok(()) => self.message = None,
-                Err(e) => self.message = Some(format!("Couldn't save the key: {e:#}")),
-            }
-        }
-        if list_bibles {
-            self.loading_bibles = true;
-            let key = self.apibible_key.trim().to_string();
-            let base = library.api_bible_base.clone();
-            let tx = tx.clone();
-            let _ = library.set_api_key("api-bible-key", &key);
-            std::thread::spawn(move || {
-                let r = bible_core::online::apibible::list_bibles(&base, &key, Some("eng"))
-                    .map_err(|e| format!("{e:#}"));
-                let _ = tx.send(TaskResult::Bibles(r));
-            });
-        }
-        ui.add_space(8.0);
-        footnote(
-            ui,
-            p,
-            &format!(
-                "Chapters are fetched as you read and shown with the publisher’s notice; cached text \
-                 follows each one’s terms (ESV and NLT: at most 500 verses). The NLT needs no key: 50 \
-                 verses a request and 500 requests a day, or 500 and 5,000 with a free key from \
-                 api.nlt.to. Keys live in the {}.",
-                library.secrets().backend_name()
-            ),
-        );
-        if let Some(m) = &self.message {
-            ui.add_space(8.0);
-            footnote(ui, p, m);
-        }
-
-        // API.Bible's list, once fetched: add any of them.
-        match &self.bibles {
-            Some(Ok(list)) => {
-                ui.add_space(24.0);
-                group_title(ui, p, "Your API.Bible translations");
-                let (fr, _) = ui.allocate_exact_size(vec2(ui.available_width(), 32.0), Sense::hover());
-                widgets::text_field(
-                    ui,
-                    p,
-                    fr,
-                    &mut self.bible_filter,
-                    "Filter (e.g. NASB, LSB, NLT)",
-                    Some(icons::search),
-                    false,
-                    false,
-                    egui::Id::new("bible-filter"),
-                );
-                ui.add_space(8.0);
-                let f = self.bible_filter.to_lowercase();
-                let shown: Vec<&RemoteBible> = list
-                    .iter()
-                    .filter(|b| {
-                        f.is_empty()
-                            || b.name.to_lowercase().contains(&f)
-                            || b.abbreviation.to_lowercase().contains(&f)
-                    })
-                    .take(40)
-                    .collect();
-                let mut add: Option<RemoteBible> = None;
-                let heights = vec![44.0; shown.len().max(1)];
-                rows_card(ui, p, &heights, |ui, i, r| {
-                    let Some(b) = shown.get(i) else {
-                        row_label(ui, p, r, "No matches", None);
-                        return;
-                    };
-                    let installed = library.entries().iter().any(|e| {
-                        e.online().is_some_and(|o| {
-                            o.config.provider == ProviderKind::ApiBible { bible_id: b.id.clone() }
-                        })
-                    });
-                    let painter = ui.painter().clone();
-                    painter.text(
-                        pos2(r.left() + 16.0, r.center().y),
-                        Align2::LEFT_CENTER,
-                        &b.abbreviation,
-                        theme::ui_bold(11.0),
-                        p.accent,
-                    );
-                    let name = crate::pages::elide(&painter, &b.name, &text::UI.font(), r.width() - 200.0);
-                    painter.text(
-                        pos2(r.left() + 72.0, r.center().y),
-                        Align2::LEFT_CENTER,
-                        name,
-                        text::UI.font(),
-                        p.ink,
-                    );
-                    if installed {
-                        let w = widgets::badge_width(&painter, widgets::BadgeKind::Neutral, "Added");
-                        widgets::badge(
-                            &painter,
-                            p,
-                            r.right() - 16.0 - w,
-                            r.center().y,
-                            widgets::BadgeKind::Neutral,
-                            "Added",
-                        );
-                    } else if Button::new(Kind::Secondary, "Add")
-                        .small()
-                        .show_right(ui, p, r.right() - 16.0, r.center().y, ui.id().with(("add-bible", &b.id)))
-                        .1
-                        .clicked()
-                    {
-                        add = Some((*b).clone());
-                    }
-                });
-                if let Some(b) = add {
-                    let cfg = OnlineConfig {
-                        id: format!("api-{}", bible_core::import::slug(&b.abbreviation)),
-                        abbrev: b.abbreviation.clone(),
-                        name: b.name.clone(),
-                        provider: ProviderKind::ApiBible { bible_id: b.id.clone() },
-                        copyright: String::new(),
-                    };
-                    match library.add_online(cfg) {
-                        Ok(id) => actions.push(Action::SetTranslation(id)),
-                        Err(e) => self.message = Some(format!("{e:#}")),
-                    }
-                }
-            }
-            Some(Err(e)) => {
-                ui.add_space(8.0);
-                footnote(ui, p, e);
-            }
-            None => {}
-        }
     }
 }
 
@@ -2110,59 +1779,4 @@ pub fn quick_text_settings(ui: &mut Ui, settings: &mut Settings, actions: &mut V
         actions.push(Action::OpenSettings(SettingsTab::Reading));
         ui.close();
     }
-}
-
-/// An API key field: monospace, a key glyph, the key shown only while editing.
-/// What ends a row of the online translations card.
-enum Trailing<'a> {
-    Button(Kind, &'a str),
-    Badge(&'a str),
-    None,
-}
-
-impl Trailing<'_> {
-    /// Draws it with its right edge at `right`; returns its left edge and whether it was clicked.
-    fn show(&self, ui: &mut Ui, p: &Palette, right: f32, cy: f32, id: &str) -> (f32, bool) {
-        match self {
-            Trailing::Button(kind, label) => {
-                let (b, resp) =
-                    Button::new(*kind, label).small().show_right(ui, p, right, cy, ui.id().with(id));
-                (b.left(), resp.clicked())
-            }
-            Trailing::Badge(label) => {
-                let kind = widgets::BadgeKind::Success;
-                let w = widgets::badge_width(ui.painter(), kind, label);
-                (widgets::badge(ui.painter(), p, right - w, cy, kind, label).left(), false)
-            }
-            Trailing::None => (right + 10.0, false),
-        }
-    }
-}
-
-fn key_field(ui: &mut Ui, p: &Palette, rect: Rect, value: &mut String, placeholder: &str, id: egui::Id) {
-    let focused = ui.memory(|m| m.has_focus(id));
-    let painter = ui.painter();
-    if focused {
-        painter.rect_filled(rect.expand(3.0), 11.0, p.focus);
-    }
-    painter.rect_filled(rect, 8.0, p.field);
-    let ring = if focused { p.accent } else { p.border };
-    painter.rect_stroke(rect, 8.0, Stroke::new(1.0, ring), egui::StrokeKind::Inside);
-    let icon = Rect::from_min_size(pos2(rect.left() + 10.0, rect.center().y - 8.0), vec2(16.0, 16.0));
-    icons::heavy(|| icons::key(painter, icon, p.ink_3));
-    let edit =
-        Rect::from_min_max(pos2(icon.right() + 8.0, rect.top()), pos2(rect.right() - 10.0, rect.bottom()));
-    let mut child = ui.new_child(egui::UiBuilder::new().max_rect(edit));
-    child.add_sized(
-        edit.size(),
-        egui::TextEdit::singleline(value)
-            .id(id)
-            .password(!focused)
-            .hint_text(RichText::new(placeholder).color(p.ink_3).font(text::UI.font()))
-            .font(FontId::monospace(13.0))
-            .text_color(p.ink)
-            .frame(egui::Frame::NONE)
-            .margin(egui::Margin::ZERO)
-            .vertical_align(egui::Align::Center),
-    );
 }

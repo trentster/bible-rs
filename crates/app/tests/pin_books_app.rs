@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 
 use bible_core::books::{BookId, ChapterIdx, VerseRef};
 use bible_core::study::HighlightColor;
-use bible_rs::app::{BibleApp, Startup, initialize, online_counter};
+use bible_rs::app::{BibleApp, Startup, initialize};
 use bible_rs::theme;
 use eframe::egui::{self, Event, Modifiers, PointerButton, Pos2, Shape};
 use egui_kittest::Harness;
@@ -119,7 +119,7 @@ fn a_pinned_book_sits_above_the_testaments() {
         Startup { t0: Instant::now(), probe: false, init: Duration::ZERO, first_ui: None, frames: 0 };
     let mut h = Harness::builder().with_size(egui::vec2(1280.0, 1000.0)).build_eframe(|cc| {
         cc.egui_ctx.set_fonts(theme::font_definitions());
-        BibleApp::new(cc, init, online_counter(), startup)
+        BibleApp::new(cc, init, startup)
     });
     h.run_steps(8);
 

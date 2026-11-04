@@ -120,9 +120,9 @@ fn quiet_and_danger_states_are_centred() {
     let offline = Empty {
         glyph: bible_rs::icons::cloud_slash,
         tone: Tone::Danger,
-        title: "ESV can’t load John 1 right now",
-        body: "Chapters from api.esv.org need a connection. Your highlights and notes on this chapter are safe \
-               and will reappear.",
+        title: "John 1 isn’t in this translation",
+        body: "This translation starts at chapter 2, so John 1 isn’t in this file. Your highlights and notes on \
+               this book are safe, and they will show again in any translation that carries the chapter.",
         buttons: &retry,
         hints: &[],
         width: 520.0,

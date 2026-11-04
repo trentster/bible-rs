@@ -12,7 +12,7 @@
 //! `hover:x,y`, `drag:x,y>x,y` and `key:1`. A point can also be a place in the chapter being
 //! read, `verse.char`: `drag:16.4>16.26` drags from char 4 of verse 16 to char 26. Each step
 //! prints the points it used.
-//! `BIBLE_RS_SHOT_PAUSE_MS` waits that long after each frame, so chapters of an online translation
+//! `BIBLE_RS_SHOT_PAUSE_MS` waits that long after each frame.
 //! can arrive before the picture is taken.
 //!
 //! `BIBLE_RS_SHOT_FILMSTRIP=<n>` then presses ⌘B and writes the next n frames at 120 Hz as
@@ -25,7 +25,7 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use bible_rs::app::{BibleApp, Startup, bump, initialize, online_counter};
+use bible_rs::app::{BibleApp, Startup, initialize};
 use bible_rs::theme;
 use eframe::egui;
 use egui_kittest::Harness;
@@ -44,12 +44,7 @@ fn main() {
     if std::env::var_os("BIBLE_RS_OFFSCREEN").is_none() {
         eprintln!("set BIBLE_RS_OFFSCREEN=1 (and BIBLE_RS_BACKGROUND=1) so the app lays out as in a window");
     }
-    // Online text that arrives bumps the counter, so the reader lays its chapters out again.
-    let online = online_counter();
-    let notify = {
-        let online = online.clone();
-        Arc::new(move || bump(&online)) as Arc<dyn Fn() + Send + Sync>
-    };
+    let notify = Arc::new(|| {}) as Arc<dyn Fn() + Send + Sync>;
     let init = initialize(bible_rs::data_dir(), notify).expect("loading data");
     let startup =
         Startup { t0: Instant::now(), probe: false, init: Duration::ZERO, first_ui: None, frames: 0 };
@@ -65,7 +60,7 @@ fn main() {
     }
     let mut harness = builder.wgpu().build_eframe(|cc| {
         cc.egui_ctx.set_fonts(theme::font_definitions());
-        BibleApp::new(cc, init, online, startup)
+        BibleApp::new(cc, init, startup)
     });
     // The harness sets its own (dark) egui theme after the app has applied the reading theme,
     // which would leave egui's widgets (menus, fields) in stock dark style.

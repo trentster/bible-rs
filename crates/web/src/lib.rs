@@ -382,7 +382,7 @@ impl Bible {
             Some(t) => {
                 content::ChapterContent::unavailable(Some(&t.meta), c, content::ChapterStatus::Missing)
             }
-            None => content::ChapterContent::unavailable(None, c, content::ChapterStatus::Pending),
+            None => content::ChapterContent::unavailable(None, c, content::ChapterStatus::Missing),
         };
         to_js(&out)
     }

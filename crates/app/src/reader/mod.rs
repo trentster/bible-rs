@@ -14,7 +14,6 @@ pub mod layout;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
 
 use bible_core::books::{CHAPTER_COUNT, ChapterIdx, VerseRef};
 use bible_core::library::{Chapter, Library};
@@ -43,8 +42,6 @@ pub struct Env<'a> {
     pub columns: &'a [String],
     /// Whether arrow/page keys should scroll the reader (no text field has focus).
     pub keyboard: bool,
-    /// Incremented whenever online text arrives (provisional layouts are redone).
-    pub online_generation: &'a AtomicU64,
     /// Height of the toolbar floating over the reader's top edge.
     pub toolbar: f32,
     /// The verses the narrator is on right now, for the read-along tint under the voice.
@@ -97,8 +94,6 @@ impl TextSelection {
 
 struct Cached {
     layout: Arc<ChapterLayout>,
-    /// Laid out while some column was still loading; redo when online text arrives.
-    provisional: Option<u64>,
 }
 
 /// How far below the top of the viewport a followed verse lands, as a fraction of its height.
@@ -397,50 +392,23 @@ impl Reader {
         geom: &Geometry,
         c: ChapterIdx,
     ) -> Arc<ChapterLayout> {
-        let gen_now = env.online_generation.load(Ordering::Relaxed);
-        if let Some(cached) = self.cache.get(&c)
-            && cached.provisional.is_none_or(|g| g == gen_now)
-        {
+        if let Some(cached) = self.cache.get(&c) {
             return cached.layout.clone();
         }
         let cx = Ctx::new(env.typo, env.theme, geom.col_w, geom.gutter);
-        let mut provisional = false;
         let mut chapters: Vec<(String, Result<Arc<bible_core::Translation>, String>)> = Vec::new();
         for id in env.columns {
             let abbrev = env.library.get(id).map(|e| e.meta.abbrev.clone()).unwrap_or_else(|| id.clone());
             let state = match env.library.chapter(id, c) {
                 Chapter::Ready(t) => Ok(t),
-                Chapter::Pending => {
-                    provisional = true;
-                    Err("Loading…".to_string())
-                }
-                Chapter::NoKey => {
-                    provisional = true;
-                    Err("Add your API key in Settings → Translations to read this translation.".into())
-                }
-                Chapter::Failed(m) => {
-                    provisional = true;
-                    Err(format!("Couldn't load this chapter: {m}"))
-                }
+                Chapter::Failed(m) => Err(format!("Couldn't load this chapter: {m}")),
                 Chapter::Missing => Err("This translation doesn't include this chapter.".into()),
             };
             chapters.push((abbrev, state));
         }
-        // Online text carries its publisher's notice.
-        let notices: Vec<layout::Notice> = env
-            .columns
-            .iter()
-            .zip(&chapters)
-            .filter(|(_, (_, state))| state.is_ok())
-            .filter_map(|(id, (abbrev, _))| {
-                let o = env.library.get(id)?.online()?;
-                Some(layout::Notice {
-                    abbrev: abbrev.clone(),
-                    text: o.notice(),
-                    url: o.config.provider.website(),
-                })
-            })
-            .collect();
+        // Every translation Lamplit carries is bundled or imported from the reader's own file, and
+        // none of them requires a per-chapter attribution, so there is nothing to notice.
+        let notices: Vec<layout::Notice> = Vec::new();
         let t_layout = std::time::Instant::now();
         self.layouts += 1;
         let layout = ui.ctx().fonts_mut(|fonts| {
@@ -475,7 +443,7 @@ impl Reader {
             );
         }
         let layout = Arc::new(layout);
-        self.cache.insert(c, Cached { layout: layout.clone(), provisional: provisional.then_some(gen_now) });
+        self.cache.insert(c, Cached { layout: layout.clone() });
         if self.cache.len() > 48 {
             // Keep the neighbourhood of the reading position.
             let here = self.anchor.chapter.0 as i32;
@@ -868,12 +836,6 @@ impl Reader {
             }
             if first_visible.is_none() && y + l.height > reading_line {
                 first_visible = Some((ch, l.anchors.first().map_or(1, |a| a.number)));
-            }
-            if let Some(o) =
-                env.columns.iter().find_map(|id| env.library.get(id).and_then(|e| e.online().cloned()))
-                && !l.blocks.is_empty()
-            {
-                o.displayed(ch);
             }
             y += l.height;
             c = ch.next();

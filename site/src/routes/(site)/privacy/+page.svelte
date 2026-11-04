@@ -30,24 +30,17 @@
 	</p>
 
 	<h2>When the app uses the internet</h2>
-	<p>
-		On iPhone and iPad, never. The seven translations are inside the app, and it makes no network
-		connections.
+	<p class="lede">
+		Lamplit works entirely offline. The only time it connects to the internet is a one-off
+		download of the reading voice, when you ask for it. No accounts, no analytics, no tracking, no
+		update checks.
 	</p>
-	<p>The Mac app goes online for two things only, both of them things you ask for:</p>
-	<ul>
-		<li>
-			Downloading the read-aloud voice, once, when you press Install. It comes from this app's own
-			release page on GitHub, which sees your IP address, as any download does.
-		</li>
-		<li>
-			Online translations you add yourself: the ESV, NLT, or a Bible from API.Bible. The app asks
-			that publisher's server directly for the chapters you open, with your API key where one is
-			needed. For API.Bible it also reports which passages were shown, with random identifiers, as
-			API.Bible's terms require. Each publisher's own privacy policy covers those requests.
-		</li>
-	</ul>
-	<p>The app does not check for updates, and nothing else in it touches the network.</p>
+	<p>
+		The voice comes from this app's own release page on GitHub, which sees your IP address, as any
+		download does. Every translation is inside the app: the seven bundled ones and any you convert
+		from your own USFM, OSIS, Zefania or SWORD files. None of them is fetched, so no publisher or
+		server ever learns what you are reading.
+	</p>
 
 	<h2>Sharing and crash reports</h2>
 	<p>

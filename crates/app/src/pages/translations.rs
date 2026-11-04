@@ -25,12 +25,11 @@ enum Filter {
     All,
     Bundled,
     Imported,
-    Online,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Default)]
 enum Sort {
-    /// Bundled, then imported, then online: the library's own order.
+    /// Bundled, then imported: the library's own order.
     #[default]
     Kind,
     Name,
@@ -50,7 +49,6 @@ fn kind_of(e: &Entry) -> Filter {
     match e.kind {
         EntryKind::Bundled(_) => Filter::Bundled,
         EntryKind::Imported(_) => Filter::Imported,
-        EntryKind::Online(_) => Filter::Online,
     }
 }
 
@@ -87,14 +85,6 @@ fn description(e: &Entry) -> String {
             Some(d) => format!("{} · imported {d}", import_format(&m.source)),
             None => import_format(&m.source).to_string(),
         },
-        EntryKind::Online(o) => {
-            let key = match (o.has_key(), o.needs_key()) {
-                (true, _) => crate::platform::KEY_SAVED,
-                (false, true) => "no API key",
-                (false, false) => "no key needed",
-            };
-            format!("{} · {key}", o.config.provider.host())
-        }
     }
 }
 
@@ -136,18 +126,11 @@ impl State {
             EntryKind::Imported(path) => {
                 std::fs::read(path).ok().and_then(|b| bible_core::format::decoded_len(&b))
             }
-            EntryKind::Online(_) => None,
         })
     }
 
-    fn size_label(&mut self, e: &Entry, env: &PageEnv<'_>) -> String {
-        match &e.kind {
-            EntryKind::Online(_) => {
-                let n = env.library.cached_verses(&e.meta.id);
-                format!("{n} {} cached", if n == 1 { "verse" } else { "verses" })
-            }
-            _ => self.size(e).map(megabytes).unwrap_or_default(),
-        }
+    fn size_label(&mut self, e: &Entry) -> String {
+        self.size(e).map(megabytes).unwrap_or_default()
     }
 
     /// Draws the page from `content`'s top-left; returns the bottom of what was drawn.
@@ -159,11 +142,11 @@ impl State {
         let top = content.top();
         let entries: Vec<Arc<Entry>> = env.library.entries().to_vec();
         let count = |f: Filter| entries.iter().filter(|e| f == Filter::All || kind_of(e) == f).count();
-        let (nb, ni, no) = (count(Filter::Bundled), count(Filter::Imported), count(Filter::Online));
+        let (nb, ni) = (count(Filter::Bundled), count(Filter::Imported));
 
         // Header: title and counts; Add API Key… and Import… at the right.
         let mut parts = Vec::new();
-        for (n, what) in [(nb, "bundled"), (ni, "imported"), (no, "online")] {
+        for (n, what) in [(nb, "bundled"), (ni, "imported")] {
             if n > 0 {
                 parts.push(format!("{n} {what}"));
             }
@@ -199,7 +182,6 @@ impl State {
             (Filter::All, "All", entries.len()),
             (Filter::Bundled, "Bundled", nb),
             (Filter::Imported, "Imported", ni),
-            (Filter::Online, "Online", no),
         ] {
             let n = n.to_string();
             let on = self.filter == f;
@@ -322,7 +304,6 @@ impl State {
         let mut badges: Vec<(BadgeKind, &str)> = vec![match e.kind {
             EntryKind::Bundled(_) => (BadgeKind::Neutral, "Bundled"),
             EntryKind::Imported(_) => (BadgeKind::Accent, "Imported"),
-            EntryKind::Online(_) => (BadgeKind::Success, "Online"),
         }];
         if is_default {
             badges.push((BadgeKind::Solid, "Default"));
@@ -334,7 +315,7 @@ impl State {
             bx -= w + 6.0;
         }
         let size_right = more.left() - 14.0 - 150.0 - 14.0;
-        let size = self.size_label(e, env);
+        let size = self.size_label(e);
         text(&painter, size_right, row.top() + 22.0, 16.0, &size, theme::ui_font(12.0), p.ink_3, true);
         let tx = tile.right() + 14.0;
         let width = size_right - 110.0 - 14.0 - tx;
@@ -443,7 +424,6 @@ impl State {
         let mut badges = vec![match e.kind {
             EntryKind::Bundled(_) => (BadgeKind::Neutral, "Bundled"),
             EntryKind::Imported(_) => (BadgeKind::Accent, "Imported"),
-            EntryKind::Online(_) => (BadgeKind::Success, "Online"),
         }];
         if m.license.starts_with("Public Domain") {
             badges.push((BadgeKind::Outline, "Public domain"));
@@ -479,9 +459,8 @@ impl State {
                 format!("{host}{format}")
             }
             EntryKind::Imported(_) => import_format(&m.source).to_string(),
-            EntryKind::Online(o) => o.config.provider.label().to_string(),
         };
-        let size = self.size_label(e, env);
+        let size = self.size_label(e);
         let value_w = card.right() - 20.0 - (x + 80.0);
         for (k, (label, value)) in
             [("Source", source), ("Licence", m.license.clone()), ("Size", size), ("Features", features(e))]

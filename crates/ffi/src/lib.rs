@@ -322,8 +322,6 @@ impl Bible {
         let status = match lib.chapter(&translation, c) {
             Chapter::Ready(t) => return content::chapter(&t, c, options),
             Chapter::Missing => ChapterStatus::Missing,
-            Chapter::Pending => ChapterStatus::Pending,
-            Chapter::NoKey => ChapterStatus::NoKey,
             Chapter::Failed(message) => ChapterStatus::Failed { message },
         };
         ChapterContent::unavailable(meta.as_ref(), c, status)

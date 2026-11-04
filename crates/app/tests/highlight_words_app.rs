@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 
 use bible_core::books::{BookId, ChapterIdx, VerseRef};
 use bible_core::study::{HighlightColor, TextSpan};
-use bible_rs::app::{BibleApp, Startup, initialize, online_counter};
+use bible_rs::app::{BibleApp, Startup, initialize};
 use bible_rs::reader::TextPos;
 use bible_rs::theme;
 use eframe::egui::{self, Event, Key, Modifiers, OutputCommand, PointerButton, Pos2};
@@ -83,7 +83,7 @@ fn dragging_chooses_words_to_highlight() {
         Startup { t0: Instant::now(), probe: false, init: Duration::ZERO, first_ui: None, frames: 0 };
     let mut h = Harness::builder().with_size(egui::vec2(1280.0, 800.0)).build_eframe(|cc| {
         cc.egui_ctx.set_fonts(theme::font_definitions());
-        BibleApp::new(cc, init, online_counter(), startup)
+        BibleApp::new(cc, init, startup)
     });
     h.run_steps(4);
     h.state_mut().reader.jump(c, Some(16), false);

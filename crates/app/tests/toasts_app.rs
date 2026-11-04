@@ -8,7 +8,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use bible_core::books::{BookId, ChapterIdx};
-use bible_rs::app::{BibleApp, Startup, initialize, online_counter};
+use bible_rs::app::{BibleApp, Startup, initialize};
 use bible_rs::theme;
 use eframe::egui::{self, Key, Modifiers};
 use egui_kittest::Harness;
@@ -28,7 +28,7 @@ fn app(dir: &Path, step_dt: f32) -> Harness<'static, BibleApp> {
     let mut h = Harness::builder().with_size(egui::vec2(1280.0, 800.0)).with_step_dt(step_dt).build_eframe(
         move |cc| {
             cc.egui_ctx.set_fonts(theme::font_definitions());
-            BibleApp::new(cc, init, online_counter(), startup)
+            BibleApp::new(cc, init, startup)
         },
     );
     h.run_steps(4);

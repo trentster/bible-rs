@@ -28,7 +28,6 @@ pub mod motion;
 pub mod native_menu;
 pub mod note_popover;
 pub mod objects;
-pub mod offline;
 pub mod onboarding;
 pub mod pages;
 pub mod palette;
@@ -187,12 +186,9 @@ pub fn run() -> eframe::Result {
     // Load the study database, settings and the current translation on a background thread
     // while the window and GPU context are created.
     let ctx_cell: Arc<OnceLock<egui::Context>> = Arc::new(OnceLock::new());
-    let online_gen = app::online_counter();
     let notify = {
         let ctx_cell = ctx_cell.clone();
-        let online_gen = online_gen.clone();
         Arc::new(move || {
-            app::bump(&online_gen);
             if let Some(ctx) = ctx_cell.get() {
                 ctx.request_repaint();
             }
@@ -240,7 +236,7 @@ pub fn run() -> eframe::Result {
             trace(t0, "init joined (study db, library, translation decoded)");
             let startup =
                 app::Startup { t0, probe, init: std::time::Duration::ZERO, first_ui: None, frames: 0 };
-            Ok(Box::new(app::BibleApp::new(cc, init, online_gen, startup)))
+            Ok(Box::new(app::BibleApp::new(cc, init, startup)))
         }),
     )
 }

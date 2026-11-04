@@ -20,4 +20,4 @@ js-sys = { version = "0.3", optional = true }
 
 [features]
 # The importers, for the import worker's module (scripts/build-web.sh builds both).
-import = ["bible-core/import", "dep:js-sys"]
+import = ["bible-core/import", "bible-core/nlt", "dep:js-sys"]

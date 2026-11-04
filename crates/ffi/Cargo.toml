@@ -16,7 +16,7 @@ name = "bible_ffi"
 bindgen = ["uniffi/cli"]
 
 [dependencies]
-# Without "tls": the phone apps don't offer online translations yet (see bible-core's features).
+# bible-core has no network code at all: every translation is bundled or imported from a file.
 bible-core = { workspace = true, default-features = false, features = ["bundled", "native"] }
 anyhow.workspace = true
 serde_json.workspace = true

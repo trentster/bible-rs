@@ -119,8 +119,7 @@ fn set_translation(translation: &str) -> String {
 }
 
 /// `/<slug>/verses.json`: the verses the object's page quotes, in `translation` and then the
-/// KJV for whatever it lacks. An online translation gives only the chapters already saved on
-/// this Mac; asking for the rest would reach the network.
+/// KJV for whatever it lacks. Both are local, so nothing here can reach the network.
 pub fn verses_json(object: &Object, library: &Library, translation: &str) -> Vec<u8> {
     let mut ids = vec![translation];
     if translation != bible_core::bundled::DEFAULT_ID {
@@ -130,14 +129,10 @@ pub fn verses_json(object: &Object, library: &Library, translation: &str) -> Vec
         .into_iter()
         .filter_map(|id| {
             let entry = library.get(id)?;
-            let saved = entry.online().map(|_| library.cached_chapters(id));
             let mut verses = serde_json::Map::new();
             let mut chapter = None;
             for (osis, r) in &object.verses {
                 let c = r.chapter_idx();
-                if saved.as_ref().is_some_and(|s| !s.contains(&c)) {
-                    continue;
-                }
                 if chapter.as_ref().is_none_or(|(at, _)| *at != c) {
                     chapter = Some((c, library.chapter(id, c)));
                 }

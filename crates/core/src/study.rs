@@ -859,9 +859,9 @@ impl StudyStore {
     ) -> String {
         use std::fmt::Write;
         let mut md = String::new();
-        let _ = writeln!(md, "# Bible study notes\n");
+        let _ = writeln!(md, "# Lamplit study notes\n");
         let _ =
-            writeln!(md, "Exported from Bible on {} · verse text: {translation}\n", &rfc3339(now())[..10]);
+            writeln!(md, "Exported from Lamplit on {} · verse text: {translation}\n", &rfc3339(now())[..10]);
         let bookmarks = if include.bookmarks { self.bookmarks() } else { Vec::new() };
         if !bookmarks.is_empty() {
             let _ = writeln!(md, "## Bookmarks\n");

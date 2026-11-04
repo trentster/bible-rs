@@ -2,8 +2,6 @@
 
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::mpsc::{Receiver, Sender, channel};
 use std::time::{Duration, Instant};
 
 use anyhow::Result;
@@ -227,10 +225,6 @@ impl History {
     }
 }
 
-pub enum TaskResult {
-    Bibles(Result<Vec<bible_core::online::apibible::RemoteBible>, String>),
-}
-
 /// `BIBLE_RS_SCROLL_PROBE`: scrolls continuously and records how long each frame's UI takes.
 pub struct ScrollProbe {
     pub frames: Vec<f64>,
@@ -297,12 +291,8 @@ pub struct BibleApp {
     toasts: Vec<Toast>,
     toast_seq: u64,
     /// The reading (online) translation can't load the chapter being read.
-    offline: Option<crate::offline::Offline>,
     /// The main area (right of the sidebar), where toasts centre.
     main_area: egui::Rect,
-    online_gen: Arc<AtomicU64>,
-    pub task_tx: Sender<TaskResult>,
-    task_rx: Receiver<TaskResult>,
     pub busy: Option<String>,
     startup: Startup,
     /// Serialized settings as last written, and when.
@@ -392,12 +382,7 @@ fn chrome(_frame: &eframe::Frame, _ctx: &egui::Context) -> Chrome {
 }
 
 impl BibleApp {
-    pub fn new(
-        cc: &eframe::CreationContext<'_>,
-        init: Init,
-        online_gen: Arc<AtomicU64>,
-        startup: Startup,
-    ) -> Self {
+    pub fn new(cc: &eframe::CreationContext<'_>, init: Init, startup: Startup) -> Self {
         let Init { data_dir, study, library, settings, elapsed } = init;
         theme::set_accent(settings.accent);
         theme::apply(&cc.egui_ctx, settings.theme);
@@ -408,7 +393,6 @@ impl BibleApp {
         crate::macos_window::install_unified_toolbar(cc);
         let chapter = ChapterIdx(settings.chapter.min(ChapterIdx::LAST.0));
         let reader = Reader::new(chapter, settings.verse);
-        let (task_tx, task_rx) = channel();
         let sidebar = Sidebar::new(settings.sidebar_tab);
         let onboarding = (!settings.onboarded && !crate::probing()).then(|| {
             // A window opened at the reader's size (onboarding left unfinished) shrinks to fit.
@@ -437,11 +421,7 @@ impl BibleApp {
             more_highlight: None,
             toasts: Vec::new(),
             toast_seq: 0,
-            offline: None,
             main_area: egui::Rect::NOTHING,
-            online_gen,
-            task_tx,
-            task_rx,
             busy: None,
             startup: Startup { init: elapsed, ..startup },
             saved: (serde_json::to_string(&settings).unwrap_or_default(), 0.0),
@@ -544,18 +524,6 @@ impl BibleApp {
         self.history.push(here);
         let flash = flash && self.settings.flash_jumps && !self.settings.reduce_motion;
         self.reader.jump(chapter, verse, flash);
-    }
-
-    fn poll_tasks(&mut self, _ctx: &egui::Context) {
-        while let Ok(r) = self.task_rx.try_recv() {
-            match r {
-                TaskResult::Bibles(r) => {
-                    if let Some(s) = &mut self.settings_ui {
-                        s.bibles_loaded(r);
-                    }
-                }
-            }
-        }
     }
 
     fn shortcuts(&mut self, ctx: &egui::Context, actions: &mut Vec<Action>) {
@@ -1002,7 +970,7 @@ impl BibleApp {
                 self.settings.sidebar_open = true;
                 self.settings.sidebar_tab = t;
             }
-            Action::OpenSettings(tab) => self.settings_ui = Some(SettingsUi::new(tab, &self.library)),
+            Action::OpenSettings(tab) => self.settings_ui = Some(SettingsUi::new(tab)),
             Action::FontSize(d) => self.settings.typo.size = (self.settings.typo.size + d).clamp(12.0, 34.0),
             Action::FontReset => self.settings.typo.size = Typography::default().size,
             Action::SetTheme(t) => {
@@ -1122,7 +1090,7 @@ impl BibleApp {
     }
 
     /// One `BIBLE_RS_DEMO` step: `jump:<reference>`, `select:<reference>`, `palette:<query>`,
-    /// `search:<query>`, `scope:<ot|nt>`, `step:<n>` (search results), `offline:<reference>`, `note:<reference>`, `compare:<reference>`, `study:<bookmarks|highlights|notes>`,
+    /// `search:<query>`, `scope:<ot|nt>`, `step:<n>` (search results), `note:<reference>`, `compare:<reference>`, `study:<bookmarks|highlights|notes>`,
     /// `settings:<reading|translations|data>`, `plans-tab:<active|browse|completed>`,
     /// `size:<width>x<height>` (the window's inner size).
     fn demo_step(&mut self, ctx: &egui::Context, step: &str, actions: &mut Vec<Action>) {
@@ -1148,17 +1116,6 @@ impl BibleApp {
                 actions.push(Action::Compare);
             }
             "study" => self.sidebar.open_study(arg),
-            // `offline:<reference>`: that chapter of the reading (online) translation fails to
-            // load as it would without a connection.
-            "offline" => {
-                if let (Some(r), Some(o)) = (
-                    bible_core::reference::parse(arg),
-                    self.library.get(&self.settings.translation).and_then(|e| e.online()),
-                ) {
-                    let message = format!("{}: network error: io: failed to lookup address", o.meta.abbrev);
-                    o.mark_failed(r.chapter_idx(), &message);
-                }
-            }
             "scope" => self.sidebar.set_scope(arg),
             // `more:<item>`: the compact toolbar's More menu, that item highlighted.
             "more" => {
@@ -2135,41 +2092,6 @@ impl BibleApp {
         });
     }
 
-    /// Whether the reading translation is online and can't load the chapter being read: then
-    /// `Some(retrying)`, with `self.offline` saying which chapter and why.
-    fn check_offline(&mut self, cols: &[String]) -> Option<bool> {
-        let online = cols.len() == 1
-            && !self.focus
-            && self.library.get(&cols[0]).is_some_and(|e| e.online().is_some());
-        if !online {
-            self.offline = None;
-            return None;
-        }
-        let (id, c) = (&cols[0], self.reader.location.0);
-        let same = self.offline.as_ref().is_some_and(|o| o.chapter == c && o.id == *id);
-        match self.library.chapter(id, c) {
-            bible_core::library::Chapter::Failed(message) => {
-                match &mut self.offline {
-                    Some(o) if same => o.message = message,
-                    _ => {
-                        self.offline = Some(crate::offline::Offline {
-                            id: id.clone(),
-                            chapter: c,
-                            message,
-                            dismissed: false,
-                        })
-                    }
-                }
-                Some(false)
-            }
-            bible_core::library::Chapter::Pending if same => Some(true),
-            _ => {
-                self.offline = None;
-                None
-            }
-        }
-    }
-
     /// Places the Ark page's webview over its page, or closes it once another page is open, and
     /// turns what the page asks for into actions.
     fn object_view(&mut self, ctx: &egui::Context, frame: &eframe::Frame, actions: &mut Vec<Action>) {
@@ -2247,9 +2169,6 @@ impl BibleApp {
 
         // (area id, text, is the retryable error, opacity)
         let mut msgs: Vec<(Id, String, bool, f32)> = Vec::new();
-        if let Some(o) = self.offline.as_ref().filter(|o| !o.dismissed) {
-            msgs.push((Id::new("toast-offline"), o.toast(&self.library), true, 1.0));
-        }
         msgs.extend(self.toasts.iter().map(|t| {
             let left = TOAST_SECS - (now - t.at);
             let opacity = if still { 1.0 } else { (left / TOAST_FADE_SECS).clamp(0.0, 1.0) as f32 };
@@ -2324,22 +2243,6 @@ impl BibleApp {
                     }
                 });
             bottom -= size.y + 8.0;
-        }
-        if let Some(o) = &mut self.offline {
-            if retry {
-                o.retry(&self.library);
-                ctx.request_repaint();
-            }
-            o.dismissed |= dismiss;
-        }
-        // Wake for the next fade (every frame through one), or for the next toast to go.
-        let fade = if still { 0.0 } else { TOAST_FADE_SECS };
-        if let Some(next) = self.toasts.iter().map(|t| t.at + TOAST_SECS - fade - now).reduce(f64::min) {
-            if next <= 0.0 {
-                ctx.request_repaint();
-            } else {
-                ctx.request_repaint_after(Duration::from_secs_f64(next));
-            }
         }
     }
 
@@ -2643,7 +2546,6 @@ impl eframe::App for BibleApp {
             }
             ctx.request_repaint();
         }
-        self.poll_tasks(&ctx);
         let mut actions = Vec::new();
         if let Some(probe) = &mut self.sidebar_probe
             && probe.begin(&ctx, frame_start)
@@ -2797,7 +2699,6 @@ impl eframe::App for BibleApp {
             let reader_rect =
                 egui::Rect::from_min_max(full.min, egui::pos2(full.right() - inspector, full.bottom()));
             let cols = self.columns();
-            let offline = self.check_offline(&cols);
             let searching = self.sidebar.result_position().is_some();
             // Bands under the toolbar: the parallel columns' heads, a search's result navigator.
             let heads = if cols.len() > 1 { COLUMN_HEADS } else { 0.0 };
@@ -2825,7 +2726,6 @@ impl eframe::App for BibleApp {
                 theme: self.settings.theme,
                 columns: &cols,
                 keyboard,
-                online_generation: &self.online_gen,
                 toolbar: top,
                 resizing: self.sidebar_motion.moving(),
                 // Read aloud's read-along tint: the sentence under the voice, unless the reader has
@@ -2844,14 +2744,7 @@ impl eframe::App for BibleApp {
                 },
             };
             let mut reader_ui = ui.new_child(egui::UiBuilder::new().max_rect(reader_rect));
-            if let (Some(state), Some(retrying)) = (&self.offline, offline) {
-                // The chapter can't be fetched: the error page in the reader's place.
-                let area = egui::Rect::from_min_max(
-                    egui::pos2(reader_rect.left(), reader_rect.top() + self.chrome.height),
-                    reader_rect.max,
-                );
-                crate::offline::show(&mut reader_ui, p, area, &self.library, state, retrying, &mut actions);
-            } else {
+            {
                 self.reader.marker_for = self.note_popover.as_ref().map(|n| n.verse);
                 self.reader.show(&mut reader_ui, &env, &mut actions);
                 // The listening bar sits over the foot of the page, never in the text's way.
@@ -2873,7 +2766,7 @@ impl eframe::App for BibleApp {
                 crate::trace(self.startup.t0, "reader laid out and painted");
             }
             // Not while the first frames are being raced to the screen, nor while nothing is read.
-            if self.startup.frames > 2 && offline.is_none() {
+            if self.startup.frames > 2 {
                 self.reading.tick(
                     ctx.input(|i| i.time),
                     ctx.input(|i| i.focused),
@@ -2998,17 +2891,9 @@ impl eframe::App for BibleApp {
             }
         }
         if let Some(s) = &mut self.settings_ui {
-            let tx = self.task_tx.clone();
             let mut import: Option<(PathBuf, Option<String>)> = None;
-            let open = s.show(
-                &ctx,
-                &mut self.library,
-                &mut self.settings,
-                &self.study,
-                &mut actions,
-                &tx,
-                &mut import,
-            );
+            let open =
+                s.show(&ctx, &mut self.library, &mut self.settings, &self.study, &mut actions, &mut import);
             if let Some((path, key)) = import {
                 let mut sheet = crate::import_sheet::ImportSheet::with_path(path);
                 sheet.set_key(key.unwrap_or_default());
@@ -3152,14 +3037,6 @@ pub fn shell_open(target: &std::ffi::OsStr) {
             CoUninitialize();
         }
     }
-}
-
-pub fn online_counter() -> Arc<AtomicU64> {
-    Arc::new(AtomicU64::new(0))
-}
-
-pub fn bump(counter: &AtomicU64) {
-    counter.fetch_add(1, Ordering::Relaxed);
 }
 
 #[cfg(test)]

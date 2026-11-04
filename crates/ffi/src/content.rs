@@ -24,10 +24,6 @@ pub enum ChapterStatus {
     Ready,
     /// The translation doesn't have this chapter (a New Testament only import, say).
     Missing,
-    /// An online chapter still on its way.
-    Pending,
-    /// An online translation whose key isn't set.
-    NoKey,
     Failed {
         message: String,
     },

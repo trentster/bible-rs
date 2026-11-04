@@ -3,14 +3,13 @@
 //! * **Bundled** — public-domain `.bbl` blobs compiled into the binary.
 //! * **Imported** — `.bbl` files the user converted from their own OSIS/USFM/Zefania/SWORD
 //!   files, stored in `<data dir>/translations/`.
-//! * **Online** — fetched chapter by chapter from the ESV API or API.Bible with the user's key,
-//!   or from the NLT API or the NET Bible API (no key needed).
 //!
-//! Local translations decode lazily (once, ≈10 ms) and can be warmed on a background thread.
-//! [`Library::chapter`] never blocks on the network.
+//! That is the whole list: Lamplit has no online translations, so a library never holds text it
+//! would have to fetch. Translations decode lazily (once, ≈10 ms) and can be warmed on a
+//! background thread.
 
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, OnceLock};
 
 use anyhow::{Context, Result, bail};
 
@@ -18,14 +17,10 @@ use crate::books::ChapterIdx;
 use crate::format;
 use crate::import::Imported;
 use crate::model::{Origin, Translation, TranslationMeta};
-use crate::online::{self, ChapterState, DiskCache, OnlineConfig, OnlineTranslation, ProviderKind};
-use crate::secrets::SecretStore;
-use crate::sync::LockExt;
 
 pub enum EntryKind {
     Bundled(&'static [u8]),
     Imported(PathBuf),
-    Online(Arc<OnlineTranslation>),
 }
 
 pub struct Entry {
@@ -36,14 +31,7 @@ pub struct Entry {
 
 impl Entry {
     pub fn is_local(&self) -> bool {
-        !matches!(self.kind, EntryKind::Online(_))
-    }
-
-    pub fn online(&self) -> Option<&Arc<OnlineTranslation>> {
-        match &self.kind {
-            EntryKind::Online(o) => Some(o),
-            _ => None,
-        }
+        true
     }
 
     /// Decodes (once) and returns a local translation.
@@ -55,7 +43,6 @@ impl Entry {
                     Ok(b) => std::borrow::Cow::Owned(b),
                     Err(e) => return Err(format!("reading {}: {e}", p.display())),
                 },
-                EntryKind::Online(_) => return Err("online translations are fetched per chapter".into()),
             };
             format::decode(&bytes)
                 .map(|mut t| {
@@ -73,53 +60,29 @@ impl Entry {
     }
 
     pub fn copyright(&self) -> String {
-        match &self.kind {
-            EntryKind::Online(o) => o.copyright(),
-            _ => self.meta.copyright.clone(),
-        }
+        self.meta.copyright.clone()
     }
 }
 
 pub enum Chapter {
     Ready(Arc<Translation>),
-    Pending,
+    /// The chapter's text couldn't be read or decoded.
     Failed(String),
-    NoKey,
     /// The translation doesn't contain this chapter (e.g. a New Testament only import).
     Missing,
 }
 
 type Notify = Arc<dyn Fn() + Send + Sync>;
 
-/// API keys cached in memory so the keychain isn't queried every frame.
-#[derive(Default)]
-struct KeyCache {
-    values: Mutex<std::collections::HashMap<&'static str, Option<String>>>,
-}
-
 pub struct Library {
     data_dir: PathBuf,
     entries: Vec<Arc<Entry>>,
-    secrets: SecretStore,
-    keys: Arc<KeyCache>,
-    cache: Option<Arc<DiskCache>>,
     notify: Notify,
-    device_id: String,
-    pub api_bible_base: String,
 }
 
 impl Library {
     pub fn open(data_dir: &Path, notify: Notify) -> Self {
-        let mut lib = Library {
-            data_dir: data_dir.to_path_buf(),
-            entries: Vec::new(),
-            secrets: SecretStore::new(data_dir),
-            keys: Arc::new(KeyCache::default()),
-            cache: None,
-            notify,
-            device_id: String::new(),
-            api_bible_base: online::apibible::DEFAULT_BASE.into(),
-        };
+        let mut lib = Library { data_dir: data_dir.to_path_buf(), entries: Vec::new(), notify };
         #[cfg(feature = "bundled")]
         for (_, bytes) in crate::bundled::BUNDLED {
             if let Ok(meta) = format::read_meta(bytes) {
@@ -149,18 +112,11 @@ impl Library {
                 }
             }
         }
-        for cfg in lib.online_configs() {
-            lib.attach_online(cfg);
-        }
         lib
     }
 
     pub fn data_dir(&self) -> &Path {
         &self.data_dir
-    }
-
-    pub fn secrets(&self) -> &SecretStore {
-        &self.secrets
     }
 
     pub fn entries(&self) -> &[Arc<Entry>] {
@@ -205,27 +161,10 @@ impl Library {
         let Some(e) = self.get(id) else {
             return Chapter::Failed(format!("translation {id} is not installed"));
         };
-        match &e.kind {
-            EntryKind::Online(o) => match o.chapter(c) {
-                ChapterState::Ready(t) => Chapter::Ready(t),
-                ChapterState::Pending => Chapter::Pending,
-                ChapterState::Failed(m) => Chapter::Failed(m),
-                ChapterState::NoKey => Chapter::NoKey,
-            },
-            _ => match e.load() {
-                Ok(t) if t.has_chapter(c) => Chapter::Ready(t),
-                Ok(_) => Chapter::Missing,
-                Err(err) => Chapter::Failed(format!("{err:#}")),
-            },
-        }
-    }
-
-    /// An online translation's chapters that can be read without a connection, the most recently
-    /// fetched first.
-    pub fn cached_chapters(&self, id: &str) -> Vec<ChapterIdx> {
-        match (self.get(id).and_then(|e| e.online()), &self.cache) {
-            (Some(o), Some(cache)) => cache.chapters(id, o.policy()),
-            _ => Vec::new(),
+        match e.load() {
+            Ok(t) if t.has_chapter(c) => Chapter::Ready(t),
+            Ok(_) => Chapter::Missing,
+            Err(err) => Chapter::Failed(format!("{err:#}")),
         }
     }
 
@@ -253,7 +192,7 @@ impl Library {
         Ok(id)
     }
 
-    /// Removes an imported or online translation (bundled ones cannot be removed).
+    /// Removes an imported translation (bundled ones cannot be removed).
     pub fn remove(&mut self, id: &str) -> Result<()> {
         let Some(pos) = self.entries.iter().position(|e| e.meta.id == id) else {
             bail!("no translation {id}")
@@ -263,132 +202,9 @@ impl Library {
             EntryKind::Imported(p) => {
                 std::fs::remove_file(p).with_context(|| format!("removing {}", p.display()))?;
             }
-            EntryKind::Online(_) => {
-                let mut cfgs = self.online_configs();
-                cfgs.retain(|c| c.id != id);
-                self.save_online_configs(&cfgs)?;
-                if let Some(cache) = &self.cache {
-                    let _ = cache.clear(id);
-                }
-            }
         }
         self.entries.remove(pos);
         Ok(())
-    }
-
-    fn online_path(&self) -> PathBuf {
-        self.data_dir.join("online.json")
-    }
-
-    pub fn online_configs(&self) -> Vec<OnlineConfig> {
-        std::fs::read(self.online_path())
-            .ok()
-            .and_then(|b| serde_json::from_slice(&b).ok())
-            .unwrap_or_default()
-    }
-
-    fn save_online_configs(&self, cfgs: &[OnlineConfig]) -> Result<()> {
-        std::fs::create_dir_all(&self.data_dir)?;
-        std::fs::write(self.online_path(), serde_json::to_vec_pretty(cfgs)?)?;
-        Ok(())
-    }
-
-    /// Adds (and persists) an online translation.
-    pub fn add_online(&mut self, mut cfg: OnlineConfig) -> Result<String> {
-        if self.entries.iter().any(|e| e.online().is_some_and(|o| o.config.provider == cfg.provider)) {
-            bail!("{} is already added", cfg.name);
-        }
-        let base = cfg.id.clone();
-        let mut n = 2;
-        while self.contains(&cfg.id) {
-            cfg.id = format!("{base}-{n}");
-            n += 1;
-        }
-        let mut cfgs = self.online_configs();
-        cfgs.push(cfg.clone());
-        self.save_online_configs(&cfgs)?;
-        let id = cfg.id.clone();
-        self.attach_online(cfg);
-        Ok(id)
-    }
-
-    fn ensure_cache(&mut self) {
-        if self.cache.is_none() {
-            self.cache = DiskCache::open(&self.data_dir.join("online-cache.sqlite")).ok().map(Arc::new);
-        }
-    }
-
-    fn attach_online(&mut self, cfg: OnlineConfig) {
-        self.ensure_cache();
-        if self.device_id.is_empty() {
-            let p = self.data_dir.join("device-id");
-            self.device_id = std::fs::read_to_string(&p)
-                .ok()
-                .map(|s| s.trim().to_string())
-                .filter(|s| s.len() >= 16)
-                .unwrap_or_else(|| {
-                    let id = online::random_id();
-                    let _ = std::fs::create_dir_all(&self.data_dir);
-                    let _ = std::fs::write(&p, &id);
-                    id
-                });
-        }
-        let source: Arc<dyn online::Source> = match &cfg.provider {
-            ProviderKind::Esv => Arc::new(online::esv::Esv::default()),
-            ProviderKind::ApiBible { bible_id } => Arc::new(online::apibible::ApiBible::with_base(
-                &self.api_bible_base,
-                online::apibible::FUMS_BASE,
-                bible_id,
-                &self.device_id,
-            )),
-            ProviderKind::Nlt => Arc::new(online::nlt::Nlt::new(Some(self.data_dir.join("nlt-requests")))),
-            ProviderKind::Net => Arc::new(online::net::Net::default()),
-        };
-        let name = cfg.provider.secret_name();
-        let keys = self.keys.clone();
-        let secrets = self.secrets.clone();
-        let key = Arc::new(move || {
-            let mut map = keys.values.lock_or_recover();
-            map.entry(name).or_insert_with(|| secrets.get(name)).clone()
-        });
-        let ot = OnlineTranslation::new(cfg, source, self.cache.clone(), key, self.notify.clone());
-        let meta = ot.meta.clone();
-        self.entries.push(Arc::new(Entry { meta, kind: EntryKind::Online(ot), local: OnceLock::new() }));
-    }
-
-    /// Adds an online translation with a custom source (tests, alternative endpoints).
-    pub fn add_online_with_source(&mut self, cfg: OnlineConfig, source: Arc<dyn online::Source>) -> String {
-        self.ensure_cache();
-        let name = cfg.provider.secret_name();
-        let keys = self.keys.clone();
-        let secrets = self.secrets.clone();
-        let key = Arc::new(move || {
-            let mut map = keys.values.lock_or_recover();
-            map.entry(name).or_insert_with(|| secrets.get(name)).clone()
-        });
-        let id = cfg.id.clone();
-        let ot = OnlineTranslation::new(cfg, source, self.cache.clone(), key, self.notify.clone());
-        let meta = ot.meta.clone();
-        self.entries.push(Arc::new(Entry { meta, kind: EntryKind::Online(ot), local: OnceLock::new() }));
-        id
-    }
-
-    pub fn api_key(&self, name: &'static str) -> Option<String> {
-        let mut map = self.keys.values.lock_or_recover();
-        map.entry(name).or_insert_with(|| self.secrets.get(name)).clone()
-    }
-
-    /// Stores (or with an empty value, removes) an API key in the keychain.
-    pub fn set_api_key(&self, name: &'static str, value: &str) -> Result<()> {
-        self.secrets.put(name, value)?;
-        let v = value.trim();
-        self.keys.values.lock_or_recover().insert(name, (!v.is_empty()).then(|| v.to_string()));
-        (self.notify)();
-        Ok(())
-    }
-
-    pub fn cached_verses(&self, id: &str) -> usize {
-        self.cache.as_ref().map_or(0, |c| c.stored_verses(id))
     }
 
     pub fn is_bundled(&self, id: &str) -> bool {
@@ -457,29 +273,6 @@ mod tests {
         assert!(matches!(t.meta.origin, Origin::Imported { .. }));
         lib.remove(&id).unwrap();
         assert!(!Library::open(&dir, Arc::new(|| {})).contains(&id));
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn online_config_persists_without_keys() {
-        let dir = tmp();
-        let mut lib = Library::open(&dir, Arc::new(|| {}));
-        let cfg = OnlineConfig {
-            id: "esv".into(),
-            abbrev: "ESV".into(),
-            name: "English Standard Version".into(),
-            provider: ProviderKind::Esv,
-            copyright: online::esv::COPYRIGHT.into(),
-        };
-        lib.add_online(cfg.clone()).unwrap();
-        assert!(lib.add_online(cfg).is_err());
-        let c = ChapterIdx(0);
-        assert!(matches!(lib.chapter("esv", c), Chapter::NoKey));
-        let saved = std::fs::read_to_string(dir.join("online.json")).unwrap();
-        assert!(saved.contains("\"esv\"") && !saved.to_lowercase().contains("key\":"));
-        let lib2 = Library::open(&dir, Arc::new(|| {}));
-        assert!(lib2.get("esv").unwrap().online().is_some());
-        lib.remove("esv").unwrap();
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

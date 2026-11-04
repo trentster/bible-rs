@@ -329,8 +329,6 @@ fn verse_text(
             }
             None => ("— (not in this translation)".into(), Vec::new()),
         },
-        Chapter::Pending => ("Loading…".into(), Vec::new()),
-        Chapter::NoKey => ("Add an API key in Settings → Translations.".into(), Vec::new()),
         Chapter::Failed(err) => (format!("Couldn't load: {err}"), Vec::new()),
         Chapter::Missing => ("— (not in this translation)".into(), Vec::new()),
     }

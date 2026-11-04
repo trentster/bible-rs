@@ -7,7 +7,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use bible_core::books::{BookId, ChapterIdx, VerseRef};
-use bible_rs::app::{BibleApp, Startup, initialize, online_counter};
+use bible_rs::app::{BibleApp, Startup, initialize};
 use bible_rs::{book_picker, theme};
 use eframe::egui::{self, Key, Modifiers, OutputCommand};
 use egui_kittest::Harness;
@@ -27,7 +27,7 @@ fn in_the_app_the_picker_takes_single_keys_but_copying_still_works() {
         Startup { t0: Instant::now(), probe: false, init: Duration::ZERO, first_ui: None, frames: 0 };
     let mut harness = Harness::builder().with_size(egui::vec2(1280.0, 800.0)).build_eframe(|cc| {
         cc.egui_ctx.set_fonts(theme::font_definitions());
-        BibleApp::new(cc, init, online_counter(), startup)
+        BibleApp::new(cc, init, startup)
     });
     harness.run_steps(4);
     harness.state_mut().reader.set_selection(Some(VerseRef::new(JOHN, 1, 1)));

@@ -674,3 +674,31 @@ The lamp is drawn once as flat shapes — plate, bowl, flame, flame core — and
 - **The flame-to-bowl gap is 3 units of 100.** Swept 0, 1.5, 3, 4.5 and 6.25 at 16 px: below 3 the
   flame base smears into the bowl rim, and 6.25 reads as a floating flame at 128. Three is the
   smallest gap that survives 16 px and still reads as one object at size.
+
+## 100% offline: the online translations are gone
+
+Mark's decision: **Lamplit makes no network request except the one-off read-aloud voice download,
+and only when the reader asks for it.** Upstream's online translations — ESV, NLT, NET, API.Bible —
+were removed entirely on 4 November 2026, along with the API-key store, the per-chapter disk cache
+and every string that offered them.
+
+The reason is the product, not licensing. Two things were true at once: the app calls itself
+private and offline, and it shipped a feature that fetched chapters from five publishers, reported
+which passages were displayed to two of them, and kept readers' API keys in the system keychain. A
+reader could not tell from the app which half they were in. One sentence beats a caveat: everything
+is on the device, and the only thing that ever leaves is a request you started yourself.
+
+What this cost, stated plainly:
+
+- **The ESV, NLT, NET and API.Bible texts are no longer readable in Lamplit at all.** Readers who
+  want them must import files they own — which the app supports — or wait. This is a real
+  reduction, and it is the price of the promise.
+- **`ureq`, `tls` and `keyring` left `bible-core`.** The core carries no HTTP client and no TLS
+  stack now. The app keeps `ureq` for the voice download alone.
+- **Study data was never at risk.** Highlights, notes and reading history are keyed by canonical
+  verse reference, not by translation, so data made in a translation that no longer exists reads
+  back unchanged, and a saved reading position naming one falls back to the bundled default. Both
+  are tests: `crates/core/tests/removed_translation.rs` and
+  `crates/app/tests/settings_fallback.rs`.
+- **Existing keychain entries were left alone.** Nothing deletes a reader's saved keys; the app
+  simply has no code that could read one.
