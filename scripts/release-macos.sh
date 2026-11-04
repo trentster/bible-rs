@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Builds a downloadable macOS release of Bible into dist/ with one command:
+# Builds a downloadable macOS release of Lamplit into dist/ with one command:
 #
-#   Bible.app                           universal (arm64 + x86_64), Developer ID signed, stapled
-#   bible-rs-<version>-universal.dmg    drag-to-Applications disk image, signed, stapled
-#   bible-rs-universal.dmg              the same DMG under the name the website links to
+#   Lamplit.app                         universal (arm64 + x86_64), Developer ID signed, stapled
+#   lamplit-<version>-universal.dmg     drag-to-Applications disk image, signed, stapled
+#   lamplit-universal.dmg               the same DMG under the name the website links to
 #   bible-rs-<version>-universal.zip    the app alone, for direct downloads and Sparkle updates
 #   bible-rs-<version>-SHA256SUMS.txt   checksums of the DMGs and the zip
 #   appcast.xml                         the update feed installed copies check, signed
@@ -53,15 +53,16 @@ cd "$ROOT"
 
 VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
 MIN_MACOS=11.0
-APP="dist/Bible.app"
-BIN="$APP/Contents/MacOS/Bible"
-NAME="bible-rs-${VERSION}-universal"
+MAC_BUNDLE_ID="${MAC_BUNDLE_ID:-au.com.onyxit.lamplit.mac}"
+APP="dist/Lamplit.app"
+BIN="$APP/Contents/MacOS/Lamplit"
+NAME="lamplit-${VERSION}-universal"
 DMG="dist/$NAME.dmg"
 # simplymybible.com/download redirects to releases/latest/download/bible-rs-universal.dmg,
 # so every release needs this unversioned copy too.
-LATEST_DMG="dist/bible-rs-universal.dmg"
+LATEST_DMG="dist/lamplit-universal.dmg"
 ZIP="dist/$NAME.zip"
-SUMS="dist/bible-rs-${VERSION}-SHA256SUMS.txt"
+SUMS="dist/lamplit-${VERSION}-SHA256SUMS.txt"
 # Installed copies read releases/latest/download/appcast.xml (SUFeedURL), which points them at
 # this release's zip.
 APPCAST="dist/appcast.xml"
@@ -215,9 +216,9 @@ check_plist() {
   printf '%-30s %s\n' "$1" "$got"
   [[ "$got" == "$2" ]] || die "Info.plist $1 is '$got', expected '$2'"
 }
-check_plist CFBundleIdentifier dev.bible-rs.app
-check_plist CFBundleName Bible
-check_plist CFBundleExecutable Bible
+check_plist CFBundleIdentifier "$MAC_BUNDLE_ID"
+check_plist CFBundleName Lamplit
+check_plist CFBundleExecutable Lamplit
 # A build with no updater bundled has no feed to point at: bundle-macos.sh writes these keys only
 # with SPARKLE_UPDATES=1. An ad-hoc release (--ad-hoc, no Developer ID, no signing key) is one, so
 # it must be checked for their absence rather than their value.
@@ -287,7 +288,7 @@ fi
 
 step "Building the disk image"
 "$VENV/bin/dmgbuild" -s packaging/macos/dmg-settings.py -D app="$APP" \
-  -D background=packaging/macos/dmg-background.png Bible "$DMG"
+  -D background=packaging/macos/dmg-background.png Lamplit "$DMG"
 if [[ "$ADHOC" == "0" ]]; then
   codesign --force --timestamp --sign "$SIGN_IDENTITY" "$DMG"
   codesign --verify --strict --verbose=2 "$DMG"
@@ -298,10 +299,10 @@ echo "hdiutil verify: ok"
 mkdir -p "$MOUNT"
 hdiutil attach -readonly -nobrowse -noautoopen -mountpoint "$MOUNT" "$DMG" >/dev/null
 [[ "$(readlink "$MOUNT/Applications")" == /Applications ]] || die "the DMG has no Applications link"
-ditto "$MOUNT/Bible.app" "$TMP/installed/Bible.app"
+ditto "$MOUNT/Lamplit.app" "$TMP/installed/Lamplit.app"
 hdiutil detach "$MOUNT" -quiet
-cmp -s "$BIN" "$TMP/installed/Bible.app/Contents/MacOS/Bible" || die "the DMG holds a different build"
-codesign --verify --deep --strict --verbose=2 "$TMP/installed/Bible.app" ||
+cmp -s "$BIN" "$TMP/installed/Lamplit.app/Contents/MacOS/Lamplit" || die "the DMG holds a different build"
+codesign --verify --deep --strict --verbose=2 "$TMP/installed/Lamplit.app" ||
   die "the app copied out of the DMG fails strict signature checks"
 if [[ "$NOTARIZE" == "1" ]]; then
   step "Notarizing the disk image"
@@ -330,10 +331,10 @@ if [[ "$NOTARIZE" == "1" ]]; then
 <?xml version="1.0" encoding="utf-8"?>
 <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
   <channel>
-    <title>Bible</title>
+    <title>Lamplit</title>
     <link>$REPO_URL</link>
     <item>
-      <title>Bible $VERSION</title>
+      <title>Lamplit $VERSION</title>
       <pubDate>$(LC_ALL=C date -u '+%a, %d %b %Y %H:%M:%S +0000')</pubDate>
       <sparkle:version>$VERSION</sparkle:version>
       <sparkle:shortVersionString>$VERSION</sparkle:shortVersionString>

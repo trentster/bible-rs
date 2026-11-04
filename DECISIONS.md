@@ -612,6 +612,31 @@ trust it.
 Traded away: two lines that do nothing on a current compiler, in exchange for not lying about the
 minimum.
 
+## The name: Lamplit on the outside, bible-rs underneath
+
+Everything a reader sees says **Lamplit**: the window title, the menu bar's app menu and About item,
+the Settings heading, the brand on shared images, the update notices, the Mac bundle's name and
+executable, the DMG's name, and the iOS display name. What stays as it is, and why:
+
+- **Crate and repository names** (`bible-core`, `bible-rs`, `bible-ffi`). Invisible to readers; renaming
+  them would churn every path, import and CI job for no one's benefit.
+- **The Mac data folder** (`…/Application Support/bible-rs`). Renaming it would orphan existing study
+  data — notes, highlights, bookmarks, reading plans — for every current user. It is not a user-facing
+  name.
+- **The study export tag** (`"app":"bible-rs"`). Exports keep the tag they have always had, so files
+  written by either name stay importable in both directions.
+- **The Xcode project and scheme** (`Bible.xcodeproj`, scheme `Bible`). Developer-facing only, and the
+  bundle's display name is what a reader sees on the home screen.
+
+**One consequence worth knowing:** `eframe::run_native`'s name decides where egui keeps its own window
+state, so renaming it to "Lamplit" resets the saved window size and position once, on the first launch
+after this change. It is a one-time reset, not a loss of study data.
+
+**Bundle identifiers** are single settings in each place they are needed — `MAC_BUNDLE_ID` in
+`scripts/bundle-macos.sh` and `scripts/release-macos.sh`, `BIBLE_BUNDLE_ID` in
+`apps/ios/Config/Bible.xcconfig` — and currently hold the placeholder `au.com.onyxit.lamplit(.mac)`.
+Mark has not chosen the final identifier, and it cannot change once an App Store record exists.
+
 ## What was traded away
 
 - Highlights of part of a verse fall back to the whole verse in a translation that words it

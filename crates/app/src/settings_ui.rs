@@ -1978,7 +1978,7 @@ fn about(ui: &mut Ui, p: &Palette) {
     centred(
         r.top() + 100.0,
         40.0,
-        "Bible",
+        "Lamplit",
         FontId::new(32.0, theme::family(theme::SERIF_DISPLAY)),
         p.ink,
         -0.015,

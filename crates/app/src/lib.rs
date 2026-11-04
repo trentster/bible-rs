@@ -206,7 +206,7 @@ pub fn run() -> eframe::Result {
         .expect("spawn init thread");
 
     let mut viewport = egui::ViewportBuilder::default()
-        .with_title("Bible")
+        .with_title("Lamplit")
         .with_app_id("bible-rs")
         .with_inner_size(if first_run { onboarding::SIZE } else { egui::vec2(1280.0, 800.0) })
         .with_min_inner_size([620.0, 420.0]);
@@ -232,7 +232,7 @@ pub fn run() -> eframe::Result {
     };
     let probe = std::env::var_os("BIBLE_RS_STARTUP_PROBE").is_some();
     eframe::run_native(
-        "Bible",
+        "Lamplit",
         options,
         Box::new(move |cc| {
             trace(t0, "window + GPU context ready");

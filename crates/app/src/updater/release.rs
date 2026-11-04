@@ -78,7 +78,7 @@ impl fmt::Display for Error {
             Error::Offline(_) => {
                 write!(
                     f,
-                    "Bible couldn’t reach GitHub, where updates come from. Check your internet connection."
+                    "Lamplit couldn’t reach GitHub, where updates come from. Check your internet connection."
                 )
             }
             Error::Server(code) => {

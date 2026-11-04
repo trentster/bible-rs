@@ -1,8 +1,8 @@
-# dmgbuild settings for the Bible disk image. scripts/release-macos.sh runs
-#   dmgbuild -s packaging/macos/dmg-settings.py -D app=dist/Bible.app \
-#     -D background=packaging/macos/dmg-background.png Bible out.dmg
+# dmgbuild settings for the Lamplit disk image. scripts/release-macos.sh runs
+#   dmgbuild -s packaging/macos/dmg-settings.py -D app=dist/Lamplit.app \
+#     -D background=packaging/macos/dmg-background.png Lamplit out.dmg
 #
-# The background is the Paper file "Bible", page Distribution, artboard
+# The background is the Paper file "Lamplit", page Distribution, artboard
 # "DMG Background (640×420)", exported at 1x and 2x (the 2x file set to 144 dpi). dmgbuild
 # finds dmg-background@2x.png next to the 1x file and merges the two into a Retina TIFF.
 # dmgbuild writes Finder's window layout (.DS_Store) itself, so no Finder scripting is needed

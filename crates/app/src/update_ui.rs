@@ -47,10 +47,10 @@ fn words(status: &Status) -> Option<Words> {
             ("Checking for updates…".into(), "Asking GitHub for the newest version of Bible.".into(), CANCEL)
         }
         Status::UpToDate => {
-            ("You’re up to date".into(), format!("Bible {CURRENT} is the newest version."), OK)
+            ("You’re up to date".into(), format!("Lamplit {CURRENT} is the newest version."), OK)
         }
         Status::Available { version } => (
-            format!("Bible {version} is available"),
+            format!("Lamplit {version} is available"),
             format!("You have {CURRENT}. Update downloads and installs it, then opens Bible again."),
             &[(Choice::Close, "Later", false), (Choice::Update, "Update", true)],
         ),
@@ -59,7 +59,7 @@ fn words(status: &Status) -> Option<Words> {
         }
         Status::Installing { version } => (
             format!("Installing Bible {version}…"),
-            "Bible closes and opens again by itself in a moment.".into(),
+            "Lamplit closes and opens again by itself in a moment.".into(),
             &[],
         ),
         Status::Failed { message, retry } => (

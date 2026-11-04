@@ -556,7 +556,8 @@ fn draw_card(
     if o.translation {
         text(painter, inner.left(), footer_top, 16.0, &t.meta.name, theme::ui_medium(11.0), c.footer, false);
     }
-    let bw = text(painter, inner.right(), footer_top, 16.0, "Bible", theme::ui_semibold(11.0), c.brand, true);
+    let bw =
+        text(painter, inner.right(), footer_top, 16.0, "Lamplit", theme::ui_semibold(11.0), c.brand, true);
     let icon = Rect::from_min_size(pos2(inner.right() - bw - 4.0 - 12.0, footer_top + 2.0), vec2(12.0, 12.0));
     icons::book(painter, icon, c.brand);
 }

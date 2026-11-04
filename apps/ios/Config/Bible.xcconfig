@@ -3,7 +3,8 @@
 //
 //   DEVELOPMENT_TEAM = ABCDE12345
 //   BIBLE_BUNDLE_ID = com.example.bible
-BIBLE_BUNDLE_ID = dev.bible-rs.ios
+// Mark has not chosen the final identifier; it cannot change once the App Store record exists.
+BIBLE_BUNDLE_ID = au.com.onyxit.lamplit
 DEVELOPMENT_TEAM =
 CODE_SIGN_STYLE = Automatic
 

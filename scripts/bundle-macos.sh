@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds dist/Bible.app on macOS. scripts/release-macos.sh wraps it to make the signed,
+# Builds dist/Lamplit.app on macOS. scripts/release-macos.sh wraps it to make the signed,
 # notarized DMG and zip (see RELEASING.md).
 #
 #   scripts/bundle-macos.sh              # native architecture, ad-hoc signature
@@ -21,7 +21,9 @@ if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   exit 1
 fi
 COPYRIGHT="$(sed -n 's/^Copyright (c) /Copyright © /p' LICENSE | head -1)"
-APP="dist/Bible.app"
+# Mark has not chosen the final identifier; it cannot change once an App Store record exists.
+MAC_BUNDLE_ID="${MAC_BUNDLE_ID:-au.com.onyxit.lamplit.mac}"
+APP="dist/Lamplit.app"
 ENTITLEMENTS="packaging/macos/entitlements.plist"
 # In-app updating (Sparkle) is opt-in: `SPARKLE_UPDATES=1 scripts/bundle-macos.sh`.
 #
@@ -58,7 +60,7 @@ fi
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
-cp "$BIN" "$APP/Contents/MacOS/Bible"
+cp "$BIN" "$APP/Contents/MacOS/Lamplit"
 
 # Sparkle, loaded once the first frame is up (crates/app/src/updater). The app isn't sandboxed, so
 # Sparkle's XPC services aren't needed; headers and modules are build-time only.
@@ -99,10 +101,10 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>CFBundleName</key><string>Bible</string>
-  <key>CFBundleDisplayName</key><string>Bible</string>
-  <key>CFBundleIdentifier</key><string>dev.bible-rs.app</string>
-  <key>CFBundleExecutable</key><string>Bible</string>
+  <key>CFBundleName</key><string>Lamplit</string>
+  <key>CFBundleDisplayName</key><string>Lamplit</string>
+  <key>CFBundleIdentifier</key><string>${MAC_BUNDLE_ID}</string>
+  <key>CFBundleExecutable</key><string>Lamplit</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
@@ -137,4 +139,4 @@ if [[ "$SPARKLE_UPDATES" == "1" ]]; then
 fi
 "${SIGN[@]}" --entitlements "$ENTITLEMENTS" "$APP"
 
-echo "Built $APP ($VERSION, $(lipo -archs "$APP/Contents/MacOS/Bible"), Sparkle: $([[ "$SPARKLE_UPDATES" == "1" ]] && echo on || echo off))"
+echo "Built $APP ($VERSION, $(lipo -archs "$APP/Contents/MacOS/Lamplit"), Sparkle: $([[ "$SPARKLE_UPDATES" == "1" ]] && echo on || echo off))"
