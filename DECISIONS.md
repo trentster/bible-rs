@@ -659,3 +659,18 @@ Mark has not chosen the final identifier, and it cannot change once an App Store
   lookup, so a reader is never shown a definition for a different word. The price is that KJV
   spellings outside the table answer "no entry" even though the entry exists under another
   spelling.
+
+## The icon, and why it is built twice
+
+The lamp is drawn once as flat shapes — plate, bowl, flame, flame core — and rendered from that.
+
+- **The shipped .icns keeps a faint gradient and a 10% inner edge on the plate.** They are not
+  decoration: on a blue Finder selection the flat blue plate nearly disappears, and the edge is
+  what separates the tile from the highlight. Measured at 16 px, where it matters.
+- **The Icon Composer build, when macOS and Xcode allow it, uses the flat layers and no edge.**
+  macOS 26 applies its own depth, specular edge and tinting to layered icons; baking ours in would
+  double it. The selection case has to be re-checked after that build, and if the system's edge
+  does not solve it, the edge comes back as a layer rather than as a flatten.
+- **The flame-to-bowl gap is 3 units of 100.** Swept 0, 1.5, 3, 4.5 and 6.25 at 16 px: below 3 the
+  flame base smears into the bowl rim, and 6.25 reads as a floating flame at 128. Three is the
+  smallest gap that survives 16 px and still reads as one object at size.

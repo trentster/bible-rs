@@ -1,3 +1,7 @@
+> **This is upstream's guide, kept because the code is shared.** The fork this repository now holds
+> ships macOS only: no Windows build is produced, and the updater described below does not exist in
+> it. Read the signing steps as upstream's, not as instructions for Lamplit.
+
 # Bible for Windows
 
 The Windows app is the Mac app built for Windows. It has the same reader, search, study tools,

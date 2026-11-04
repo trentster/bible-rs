@@ -4,9 +4,9 @@
 	import Doc from '#lib/Doc.svelte';
 
 	const title = `Support | ${SITE_NAME}`;
-	const description = 'Help with Bible for iPhone, iPad and Mac, and how to report a problem.';
+	const description = 'Help with Lamplit for iPhone, iPad and Mac, and how to report a problem.';
 	const url = `${SITE_URL}/support`;
-	const issues = 'https://github.com/michaelshimeles/bible-rs/issues';
+	const issues = 'https://github.com/trentster/bible-rs/issues';
 </script>
 
 <svelte:head>
@@ -15,12 +15,12 @@
 	<link rel="canonical" href={url} />
 </svelte:head>
 
-<Doc heading="Support" meta="Bible for iPhone, iPad and Mac">
+<Doc heading="Support" meta="Lamplit for iPhone, iPad and Mac">
 	<p class="lede">
 		Found a problem or have a question? <a href="{issues}/new">Open an issue on GitHub</a>, or
 		<a href={issues}>search the existing ones</a>. Include your device, its system version and the
 		app's version. On iPhone and iPad the version is at the bottom of the Text and theme settings;
-		on the Mac it's under Bible, then About Bible.
+		on the Mac it's under Lamplit, then About Lamplit.
 	</p>
 
 	<h2>Back up or move your notes</h2>
@@ -44,7 +44,7 @@
 
 	<h2>Privacy</h2>
 	<p>
-		Bible collects no data, and the iPhone and iPad app never goes online. The
+		Lamplit collects no data, and the iPhone and iPad app never goes online. The
 		<a href={resolve('/(site)/privacy')}>privacy policy</a> has the details.
 	</p>
 

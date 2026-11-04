@@ -390,7 +390,7 @@ bible-rs import-notes notes.json
 ## iPhone and web
 
 Upstream ships an iPhone app (`apps/ios`) and a web reader at
-[simplymybible.com/read](https://simplymybible.com/read), both sharing this core through
+the site in `site/` once it is deployed, both sharing this core through
 `crates/ffi` and `crates/web`. **This fork does not build, test or release either of them** — the
 code is present because it is upstream's, and Read Aloud exists on the Mac only.
 

@@ -15,7 +15,7 @@ export const NAME = 'Bible';
  * The website's name. Every page's title ends with it, and it is og:site_name and the WebSite's
  * name in the JSON-LD. src/lib/topics/build.mjs reads it from here for the topic pages' titles.
  */
-export const SITE_NAME = 'Simply My Bible';
+export const SITE_NAME = 'Lamplit';
 export const REPO_URL = 'https://github.com/michaelshimeles/bible-rs';
 
 /** The DMG on the latest GitHub release. */
@@ -25,4 +25,9 @@ export const DOWNLOAD_URL = `${REPO_URL}/releases/latest/download/bible-rs-unive
  * Canonical site origin, no trailing slash. Every absolute URL in the page's metadata
  * is built from it; static/robots.txt repeats it by hand.
  */
-export const SITE_URL = 'https://simplymybible.com';
+/**
+ * The real domain, once one is registered. Until then this placeholder keeps the build honest and
+ * the canonical URLs visibly wrong, which is better than quietly pointing at upstream's site.
+ * The App Store listing cannot be submitted while this says lamplit.example.
+ */
+export const SITE_URL = 'https://lamplit.example';
