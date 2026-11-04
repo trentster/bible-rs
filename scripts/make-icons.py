@@ -3,7 +3,7 @@
 # requires-python = ">=3.11"
 # dependencies = ["numpy==2.3.4", "pillow==11.3.0"]
 # ///
-"""Makes every app and site icon from the logo master, packaging/logo/bible-logo-source.png.
+"""Makes every app and site icon from the logo master, packaging/logo/lamplit-master.png.
 
     uv run scripts/make-icons.py
     (cd site && sh scripts/og.sh)   # then the share image, which shows site/static/icon.png
@@ -14,17 +14,28 @@ from the screenshot to its own size. Small icons never pass through a big upscal
 larger original, change MASTER and the square's measurements below.
 """
 
+import os
 from pathlib import Path
 
 import numpy as np
 from PIL import Image, ImageFilter
 
 ROOT = Path(__file__).resolve().parent.parent
-MASTER = ROOT / "packaging/logo/bible-logo-source.png"
+# The master Mark approves: a 1024 px square with transparent corners. Until it exists, the
+# placeholder is what ships. Set LAMPLIT_MASTER to point somewhere else while trying art.
+MASTER = Path(os.environ.get("LAMPLIT_MASTER", "packaging/logo/lamplit-master.png"))
+if not MASTER.exists():
+    MASTER = Path("packaging/logo/lamplit-placeholder.png")
 
 # The square in the master, in pixels: its left and top edges, side and corner radius. Measured
 # from the edge pixels' coverage; the corners fit circular arcs to within 0.3 px.
 LEFT, TOP, SIDE, RADIUS = 77.34, 38.31, 179.28, 39.9
+
+# A finished 1024 px master is already the square, corners included: nothing to find on a dark
+# background and nothing to measure. The measurements above are only for the small screenshot.
+if Image.open(MASTER).size[0] >= 512:
+    side = Image.open(MASTER).size[0]
+    LEFT, TOP, SIDE, RADIUS = 0.0, 0.0, float(side), side * 0.22
 
 
 def rounded_square_distance(xs, ys, cx, cy, half, r):
