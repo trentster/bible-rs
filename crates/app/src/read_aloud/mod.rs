@@ -59,7 +59,9 @@ fn model_dir() -> Option<PathBuf> {
     if cfg!(debug_assertions) {
         candidates.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../data/speech"));
     }
-    candidates.into_iter().find(|dir| dir.join("model.q8.gguf").exists())
+    // Every file, not just the model: the model arrives first, so asking after it alone called a
+    // half-finished download installed and never fetched the rest.
+    candidates.into_iter().find(|dir| install::complete(dir))
 }
 
 fn voice_path(dir: &std::path::Path, voice: Voice) -> PathBuf {

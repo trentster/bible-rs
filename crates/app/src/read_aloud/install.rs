@@ -35,6 +35,13 @@ const FILES: &[(&str, &str)] = &[
     ("freya.safetensors", "eb3cd47418349e618408c16bea7153988b3ad04b41a6033039dd474a9a4dcd23"),
 ];
 
+/// Whether every file the voice needs is in `dir`. `model.q8.gguf` is the largest and arrives first,
+/// so asking after that one file alone called a half-finished download installed: the app said
+/// Ready, Listened to nothing, and never tried again. All eight, or it is not there.
+pub(crate) fn complete(dir: &std::path::Path) -> bool {
+    FILES.iter().all(|(name, _)| dir.join(name).exists())
+}
+
 /// What the whole download weighs, for a progress figure the reader can judge.
 const TOTAL_BYTES: u64 = 66_073_850;
 
@@ -190,5 +197,48 @@ mod tests {
                 "{name}'s digest is not in xtask's pins, so the two would fetch different voices"
             );
         }
+    }
+
+    /// A directory of its own, removed when the test ends.
+    struct Scratch(std::path::PathBuf);
+
+    impl Scratch {
+        fn new(tag: &str) -> Self {
+            let dir = std::env::temp_dir().join(format!("bible-rs-voice-{tag}-{}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(&dir).expect("a scratch directory");
+            Self(dir)
+        }
+
+        fn touch(&self, name: &str) {
+            std::fs::write(self.0.join(name), b"x").expect("a file");
+        }
+    }
+
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn a_download_that_stopped_after_the_model_is_not_installed() {
+        let dir = Scratch::new("partial");
+        // model.q8.gguf is the first file fetched, and the only one the old check looked for.
+        dir.touch("model.q8.gguf");
+        assert!(!complete(&dir.0), "seven files short is not an installed voice");
+        dir.touch("config.json");
+        dir.touch("tokenizer.json");
+        assert!(!complete(&dir.0), "five files short is not an installed voice");
+    }
+
+    #[test]
+    fn all_eight_files_are_an_installed_voice() {
+        let dir = Scratch::new("whole");
+        for (name, _) in FILES {
+            dir.touch(name);
+        }
+        assert!(complete(&dir.0));
+        assert_eq!(FILES.len(), 8, "the pin list is what 'installed' means");
     }
 }
