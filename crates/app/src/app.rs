@@ -560,8 +560,11 @@ impl BibleApp {
 
     fn shortcuts(&mut self, ctx: &egui::Context, actions: &mut Vec<Action>) {
         let typing = ctx.egui_wants_keyboard_input();
-        // The book picker takes the single keys (arrows, return, escape) while it's open.
+        // The book picker takes the single keys (arrows, return, escape) while it's open, and so
+        // does the verse menu: a bare arrow or Return belongs to whichever is in front of the
+        // reader, never to the page behind it.
         let picker = crate::book_picker::is_open(ctx);
+        let menu = self.verse_menu.is_some();
         let overlay = self.palette.is_some()
             || self.settings_ui.is_some()
             || self.shortcuts_open
@@ -627,11 +630,13 @@ impl BibleApp {
                 return;
             }
             // Copying works with the book picker open; the reader's single keys wait for it.
-            for (c, a) in bindings.iter().filter(|(c, a)| *a == Action::Copy || !(c.is_command() || picker)) {
+            for (c, a) in
+                bindings.iter().filter(|(c, a)| *a == Action::Copy || !(c.is_command() || picker || menu))
+            {
                 key(c.modifiers(), c.key, a.clone());
             }
             key(cmd, Key::C, Action::CopyText);
-            if picker {
+            if picker || menu {
                 return;
             }
             key(Modifiers::NONE, Key::ArrowLeft, Action::PrevChapter);
