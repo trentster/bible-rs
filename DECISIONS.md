@@ -592,6 +592,26 @@ prototype.
   toggle, and Micky chose to drop it. The scene draws the model in cubits, so the Common/Royal
   switch changes only the inches and centimetres in the panel.
 
+## Toolchain floor: what `rust-version` promises
+
+`rust-version = "1.95"` is upstream's declaration, kept as it stands: edition 2024 and the let-chains
+the code uses need a recent compiler, and this fork adds nothing stricter.
+
+The workspace dependency on the core now says its default features out loud — `bible-core =
+{ path = "crates/core", default-features = false }` at the root, and
+`bible-core = { workspace = true, default-features = true }` in `crates/app` — with ffi, web and xtask
+already opting out for themselves. That is upstream's fix for older cargo, where a member could not
+resolve its features against a workspace dependency that left `default-features` unstated.
+
+It is insurance, not a repair: nothing was broken on the toolchain this was built with
+(cargo 1.99.1, 2026-08-27), where `cargo metadata --no-deps` and the whole workspace build clean
+either way, and the declared floor of 1.95 was not installed to test against. If the floor is ever
+held to its word, build on the oldest supported toolchain once and correct this section rather than
+trust it.
+
+Traded away: two lines that do nothing on a current compiler, in exchange for not lying about the
+minimum.
+
 ## What was traded away
 
 - Highlights of part of a verse fall back to the whole verse in a translation that words it

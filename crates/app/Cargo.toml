@@ -25,7 +25,7 @@ name = "speak"
 required-features = ["speak"]
 
 [dependencies]
-bible-core.workspace = true
+bible-core = { workspace = true, default-features = true }
 # HTTPS and SHA-256: the Windows updater, and the one-time voice download every platform makes.
 sha2 = "0.10"
 ureq = { version = "3", default-features = false }
