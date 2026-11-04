@@ -27,7 +27,6 @@ impl AppMenu {
             true,
             &[
                 &PredefinedMenuItem::about(Some("About Lamplit"), None),
-                &item("check_updates", "Check for Updates…", None),
                 &PredefinedMenuItem::separator(),
                 &item("settings", "Settings…", Some("CmdOrCtrl+Comma")),
                 &PredefinedMenuItem::separator(),

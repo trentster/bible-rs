@@ -1993,18 +1993,6 @@ fn about(ui: &mut Ui, p: &Palette) {
     let version = format!("Version {} · {arch}", env!("CARGO_PKG_VERSION"));
     centred(r.top() + 144.0, 20.0, &version, theme::ui_font(13.0), p.ink_2, 0.0);
     centred(r.top() + 168.0, 20.0, crate::platform::TAGLINE, theme::ui_font(13.0), p.ink_3, 0.0);
-    let check = Button::new(Kind::Secondary, "Check for Updates…").enabled(!crate::updater::busy());
-    let notes = Button::new(Kind::Ghost, "Release Notes").trailing_icon(icons::external);
-    let (wa, wb) = (check.width(&painter), notes.width(&painter));
-    let x = cx - (wa + 8.0 + wb) / 2.0;
-    let cy = r.top() + 200.0 + 16.0;
-    if check.show_left(ui, p, x, cy, ui.id().with("check-updates")).1.clicked() {
-        crate::updater::check_for_updates(false);
-    }
-    if notes.show_left(ui, p, x + wa + 8.0, cy, ui.id().with("release-notes")).1.clicked() {
-        crate::app::open_url(crate::updater::RELEASES);
-    }
-    crate::update_ui::about(ui, p);
     ui.add_space(24.0);
 
     let licences = |ui: &mut Ui, rows: &[(&str, &str)]| {

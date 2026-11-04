@@ -45,8 +45,6 @@ pub mod shortcuts_overlay;
 pub mod sidebar;
 pub mod theme;
 pub mod time;
-pub mod update_ui;
-pub mod updater;
 pub mod verse_menu;
 pub mod webview;
 pub mod widgets;

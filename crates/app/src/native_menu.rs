@@ -12,7 +12,6 @@ pub fn action(id: &str) -> Option<Action> {
     Some(match id {
         "settings" => Action::OpenSettings(SettingsTab::Reading),
         "about" => Action::OpenSettings(SettingsTab::About),
-        "check_updates" => Action::CheckForUpdates,
         "import_translation" => Action::ImportTranslation,
         "translations" => Action::OpenSettings(SettingsTab::Translations),
         "export_md" => Action::Export(ExportKind::Markdown),

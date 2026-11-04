@@ -58,7 +58,7 @@ APP="dist/Lamplit.app"
 BIN="$APP/Contents/MacOS/Lamplit"
 NAME="lamplit-${VERSION}-universal"
 DMG="dist/$NAME.dmg"
-# simplymybible.com/download redirects to releases/latest/download/bible-rs-universal.dmg,
+# lamplit.app/download would redirect to releases/latest/download/lamplit-universal.dmg,
 # so every release needs this unversioned copy too.
 LATEST_DMG="dist/lamplit-universal.dmg"
 ZIP="dist/$NAME.zip"
@@ -66,7 +66,7 @@ SUMS="dist/lamplit-${VERSION}-SHA256SUMS.txt"
 # Installed copies read releases/latest/download/appcast.xml (SUFeedURL), which points them at
 # this release's zip.
 APPCAST="dist/appcast.xml"
-REPO_URL="https://github.com/michaelshimeles/bible-rs"
+REPO_URL="https://github.com/trentster/bible-rs"
 SPARKLE_ACCOUNT="${SPARKLE_ACCOUNT:-bible-rs}"
 SPARKLE_PUBLIC_KEY="$(sed -n 's/^SPARKLE_PUBLIC_KEY="\(.*\)"$/\1/p' scripts/bundle-macos.sh)"
 SIGN_IDENTITY="${SIGN_IDENTITY:-Developer ID Application: Fabrika LLC (5S3KCRYBD2)}"
