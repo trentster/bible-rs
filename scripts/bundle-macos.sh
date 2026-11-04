@@ -85,6 +85,10 @@ for size in 16 32 128 256 512; do
 done
 iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns"
 
+# The full licence texts ride along: About points a reader at them, and the store record needs them
+# present rather than promised.
+cp -R LICENSES "$APP/Contents/Resources/LICENSES"
+
 # The bundle ID is part of the signature's designated requirement, which the Keychain checks
 # before handing stored API keys back: changing it after a release makes every user approve
 # access again.

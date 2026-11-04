@@ -46,9 +46,31 @@ conversion writes. Terms, verbatim licence statements and the archive hashes are
 | Id | Dictionary | Source | Status | Notes |
 |---|---|---|---|---|
 | `easton` | Easton's Bible Dictionary (1897) | CrossWire `Easton.zip`, text from CCEL | Public domain | M. G. Easton died in 1894; the module states `DistributionLicense=Public Domain`. Bible words, names and places — not ordinary English. |
+| `wordnet` | Open English WordNet (2025 edition) | globalwordnet `english-wordnet` release, built by `cargo run -p xtask -- build-wordnet` | CC BY 4.0 **and** the Princeton WordNet License | Ordinary English words the Bible dictionary does not carry. Terms and the Princeton licence text are in [`dictionaries.md`](dictionaries.md). |
 
 The spelling table in `data/lexicon/aliases.tsv` is the project's own editorial data (see
 `dictionaries.md`), not part of any dictionary.
+
+## Bundled original-language text — CC BY 4.0
+
+The Hebrew, Aramaic and Greek behind each verse, and the brief lexicons the lookup shows, come from
+**STEPBible** at Tyndale House, Cambridge: <https://github.com/STEPBible/STEPBible-Data> (branch
+`master`). `scripts/build-original.py` reads three of its files, whose own names carry the licence:
+
+- `Translators Amalgamated OT+NT/TAHOT … - Translators Amalgamated Hebrew OT - STEPBible.org CC BY.txt`
+- `Translators Amalgamated OT+NT/TAGNT … - Translators Amalgamated Greek NT - STEPBible.org CC-BY.txt`
+- `Lexicons/… - Translators Brief lexicon of Extended Strongs for Hebrew/Greek - STEPBible.org CC BY.txt`
+
+They are converted into `data/original/words.tsv.zst`, `lex-h.tsv.zst` and `lex-g.tsv.zst` — 351,539
+words covering 31,094 of the 31,102 verses, 4.12 MB compressed. Credit it as:
+
+> The original-language text and lexicons are from STEPBible.org (Tyndale House, Cambridge),
+> licensed CC BY 4.0, https://github.com/STEPBible/STEPBible-Data
+
+**A gap worth stating:** the build script prints a SHA-256 prefix for each file it downloads but does
+not pin the digests, so a rebuild is not verified byte-for-byte against the source the way the
+translations and dictionaries are. Pinning them is the obvious next step; until then this record
+describes provenance, not a reproducible fetch.
 
 ## Bundled cross references — CC BY 4.0
 

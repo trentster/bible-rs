@@ -2007,7 +2007,7 @@ fn about(ui: &mut Ui, p: &Palette) {
                 p.ink,
             );
             painter.text(
-                pos2(r.left() + 166.0, r.center().y),
+                pos2(r.left() + 208.0, r.center().y),
                 Align2::LEFT_CENTER,
                 v,
                 text::SMALL.font(),
@@ -2027,6 +2027,17 @@ fn about(ui: &mut Ui, p: &Palette) {
     );
     ui.add_space(8.0);
     footnote(ui, p, "Source texts: eBible.org USFM editions, pinned by SHA-256.");
+    ui.add_space(24.0);
+    // Everything else that someone else made, from the one list the phone shows too.
+    group_title(ui, p, "Study tools and voice");
+    let study: Vec<(&str, &str)> = bible_core::credits::all()
+        .iter()
+        .filter(|c| !matches!(c.work, "Bible translations" | "Literata" | "Inter"))
+        .map(|c| (c.work, c.licence))
+        .collect();
+    licences(ui, &study);
+    ui.add_space(8.0);
+    footnote(ui, p, "Full licence texts ship inside the app, in Contents/Resources/LICENSES.");
     ui.add_space(24.0);
     group_title(ui, p, "Fonts");
     licences(ui, &[("Literata", "SIL Open Font License 1.1"), ("Inter", "SIL Open Font License 1.1")]);
