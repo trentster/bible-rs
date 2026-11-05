@@ -40,6 +40,13 @@ pub const KEY_SAVED: &str = if cfg!(target_os = "macos") {
     "key saved"
 };
 
+/// The About pane's line under the tagline: what the app promises about the network, in one line.
+pub const OFFLINE_LINE: &str = if cfg!(target_os = "macos") {
+    "Works entirely offline · nothing leaves this Mac unless you share it"
+} else {
+    "Works entirely offline · nothing leaves this device unless you share it"
+};
+
 /// The About pane's line under the version.
 pub const TAGLINE: &str = if cfg!(target_os = "macos") {
     "A very fast, native Bible reader for the Mac."

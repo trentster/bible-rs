@@ -1662,6 +1662,7 @@ fn about(ui: &mut Ui, p: &Palette) {
     let version = format!("Version {} · {arch}", env!("CARGO_PKG_VERSION"));
     centred(r.top() + 144.0, 20.0, &version, theme::ui_font(13.0), p.ink_2, 0.0);
     centred(r.top() + 168.0, 20.0, crate::platform::TAGLINE, theme::ui_font(13.0), p.ink_3, 0.0);
+    centred(r.top() + 188.0, 20.0, crate::platform::OFFLINE_LINE, theme::ui_font(13.0), p.ink_3, 0.0);
     ui.add_space(24.0);
 
     let licences = |ui: &mut Ui, rows: &[(&str, &str)]| {

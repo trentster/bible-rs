@@ -745,3 +745,11 @@ needs — on `#lib/scripture`, a static file of public-domain verses the demo ca
   `npm run check` is clean (0 errors) and `npm run build` writes the Vercel output.
 - **The site's tests went with the feature** — they were the NLT handler's. `npm test` passes with
   no test files rather than failing, which is honest about there being none.
+
+## For the iOS brief: the voice download uses URLSession, not rustls
+
+The Mac app's one request needs a TLS stack of its own — `ureq` with `rustls` — because it has no
+other way to speak HTTPS. **The iPhone app must not copy that.** Apple's `URLSession` is already on
+the device, already updated with the OS, and adds no encryption code to the binary, which also
+keeps the export-compliance question to the one Apple asks about standard HTTPS. Whatever the iOS
+voice download is written in, the rule is the same: the app ships no TLS implementation of its own.
