@@ -124,19 +124,11 @@
 	</svg>
 {/snippet}
 
-<!-- hooks.server.ts sets up the reader's page on the server, so links to it need a full page load. -->
 {#snippet actions()}
 	<div class="actions">
 		<a class="download" href={resolve('/download')} data-sveltekit-reload>
 			{@render apple()}
 			Download for macOS
-		</a>
-		<a class="web" href={resolve('/read')} data-sveltekit-reload>
-			<svg viewBox="0 0 16 16" aria-hidden="true">
-				<circle cx="8" cy="8" r="6.5" />
-				<path d="M1.5 8h13M8 1.5c-1.8 1.7-2.8 4-2.8 6.5s1 4.8 2.8 6.5M8 1.5c1.8 1.7 2.8 4 2.8 6.5s-1 4.8-2.8 6.5" />
-			</svg>
-			Read on the web
 		</a>
 	</div>
 {/snippet}

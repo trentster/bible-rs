@@ -21,6 +21,3 @@ js-sys = { version = "0.3", optional = true }
 [features]
 # The importers, for the import worker's module (scripts/build-web.sh builds both).
 import = ["bible-core/import", "dep:js-sys"]
-# Upstream's NLT page parsing. Off unless a build asks for it: no build that ships as Lamplit should
-# carry an online translation, and Mark had not decided what happens to the website's NLT page.
-nlt = ["bible-core/nlt"]

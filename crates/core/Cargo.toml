@@ -15,8 +15,6 @@ bundled = []
 # this out and keeps the model, `.bbl` files, chapter layout, search, references and the study
 # store in memory.
 native = ["import", "dep:rusqlite"]
-# The browser reader's NLT page parsing. Nothing offline needs it, and no app build turns it on.
-nlt = []
 # The importers (USFM, OSIS, Zefania, SWORD; zips), which the web build takes without `native`
 # to convert files the reader picks in the browser.
 import = ["dep:zip", "dep:flate2"]

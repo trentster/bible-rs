@@ -35,7 +35,6 @@
 				</svg>
 			</button>
 			<a class="pill mac" href={resolve('/download')} data-sveltekit-reload>Download</a>
-			<a class="pill web" href={resolve('/read')} data-sveltekit-reload>Read online</a>
 		</div>
 	</div>
 </nav>

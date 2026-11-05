@@ -39,7 +39,6 @@ const adapter: Adapter = {
 		await base.adapt(builder);
 		compactRoutes('.vercel/output/config.json');
 		// An NLT chapter's address shows the KJV's page (src/hooks.ts): kept out of search results.
-		addHeaders('.vercel/output/config.json', '^/read/nlt(?:/.*)?$', { 'X-Robots-Tag': 'noindex' });
 	}
 };
 

@@ -719,3 +719,29 @@ folder: eight files fetched and checked in 18.5 s, `installed()` true, then Read
 
 `crates/app/examples/voice-check.rs` is the check, so the next person can run it rather than reason
 about it. **A network-denied test proves nothing about TLS; only a real download does.**
+
+## The website is the app's page, not a second app
+
+The fork carried upstream's **web reader**: a SvelteKit front end that compiled `bible-core` to
+wasm and served a full Bible at a URL, with NLT chapters fetched live through the site's own
+server route. Mark's call is to delete it. It shares the core with the native apps and nothing else
+— it is a third front end for a product that ships as two native apps.
+
+What went: `site/src/lib/read/` and the reader's components, `site/src/routes/read/`, the whole
+NLT server path (`api/nlt`, `lib/server/nlt.ts` and its tests, `lib/read/nlt.ts`), `hooks.ts`,
+and the pages that only existed to feed readers into it — topics, the per-book and per-chapter
+pages, the sitemaps, the `.bbl` download route and the Ark object pages, whose verse texts came
+from the reader's core too.
+
+What stays: the landing page, **privacy**, **support** and **download** — the four a store listing
+needs — on `#lib/scripture`, a static file of public-domain verses the demo cards still use.
+
+- **`crates/web` stays.** It compiles; the reader's UI is gone, not its wasm binding.
+- **The reader is restorable.** Every file removed here was deleted with `git rm`, so
+  `git checkout <commit>^ -- site/src/lib/read` brings any of it back. Nothing was rewritten by
+  hand and then deleted.
+- **Site Node is pinned to 22** (`.nvmrc`, and `engines` already said `22.x`): the host's default
+  Node 26 refuses the dependency tree outright, so without the pin nobody can build these pages.
+  `npm run check` is clean (0 errors) and `npm run build` writes the Vercel output.
+- **The site's tests went with the feature** — they were the NLT handler's. `npm test` passes with
+  no test files rather than failing, which is honest about there being none.
