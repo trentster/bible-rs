@@ -1712,14 +1712,6 @@ fn about(ui: &mut Ui, p: &Palette) {
     group_title(ui, p, "Fonts");
     licences(ui, &[("Literata", "SIL Open Font License 1.1"), ("Inter", "SIL Open Font License 1.1")]);
     ui.add_space(24.0);
-    let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 16.0), Sense::hover());
-    ui.painter().text(
-        r.center(),
-        Align2::CENTER_CENTER,
-        "No accounts, no tracking, no network unless you add an online translation.",
-        text::SMALL.font(),
-        p.ink_3,
-    );
 }
 
 /// The toolbar's "Aa" popover: the settings people change while reading.
