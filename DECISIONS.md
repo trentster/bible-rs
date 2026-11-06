@@ -764,10 +764,15 @@ The sleep timer now offers, in this order: **End of chapter** (the default), 5, 
 minutes, **2 hours**, and **Keep reading**. The last choice is remembered per device, in the settings
 file. A cut-off reading still finishes the sentence it is in and fades.
 
-On keep-awake and audio, what was actually measured and what was not: a plain Core Audio player
-holds the assertion — `pid 481(coreaudiod) … PreventUserIdleSystemSleep named:
-"com.apple.audio.BuiltInSpeakerDevice.context.preventuseridlesleep"`, created for the playing PID,
-`Resources: audio-out BuiltInSpeakerDevice`. Lamplit plays through `cpal`, which is Core Audio, so
-the same assertion is expected while it reads. It has not been observed for Lamplit itself: this
-host cannot bring up the app's window or make it speak, so the check has to be made on the Mac that
-is running it (`pmset -g assertions` with a reading in progress).
+On keep-awake, verified on the Mac that runs the app. With Lamplit reading aloud:
+
+```
+pid 439(coreaudiod): PreventUserIdleSystemSleep named:
+"com.apple.audio.BuiltInSpeakerDevice.context.preventuseridlesleep"
+	Created for PID: 32543 → /Applications/Lamplit.app/Contents/MacOS/Lamplit
+	Resources: audio-out BuiltInSpeakerDevice
+```
+
+coreaudiod holds the assertion, attributed to Lamplit's own PID, for as long as it plays audio. So
+macOS keeps the Mac from idle-sleeping while it reads, with no keep-awake code of ours — and the
+2-hour timer and "Keep reading" lean on that rather than on anything we ship.
