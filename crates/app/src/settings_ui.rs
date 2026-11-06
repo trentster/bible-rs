@@ -1669,31 +1669,38 @@ fn about(ui: &mut Ui, p: &Palette) {
     // Names and licences wrap inside their columns rather than running into each other: a credit
     // that collides with its own licence reads as a mistake, and at the window's narrowest some of
     // these words are wide ("Ark of the Covenant specs and 3D models").
-    let licences = |ui: &mut Ui, rows: &[(&str, &str)]| {
+    let licences = |ui: &mut Ui, rows: &[(&str, &str, &str)]| {
         let width = ui.available_width();
         let name_w = 208.0 - 16.0 - 8.0;
         let value_w = width - 208.0 - 16.0;
-        let laid: Vec<(Arc<egui::Galley>, Arc<egui::Galley>)> = rows
+        // Three galleys a row: what it is, who made it, and the licence. Naming the maker on every
+        // row is deliberate — "CC BY 4.0" alone credits nobody, and the licence asks for the name.
+        let laid: Vec<(Arc<egui::Galley>, Arc<egui::Galley>, Arc<egui::Galley>)> = rows
             .iter()
-            .map(|(k, v)| {
+            .map(|(k, holder, v)| {
                 (
                     ui.painter().layout((*k).to_string(), theme::ui_bold(12.0), p.ink, name_w),
+                    ui.painter().layout((*holder).to_string(), text::SMALL.font(), p.ink_3, name_w),
                     ui.painter().layout((*v).to_string(), text::SMALL.font(), p.ink_2, value_w),
                 )
             })
             .collect();
         let heights: Vec<f32> = laid
             .iter()
-            .map(|(k, v)| (k.size().y.max(v.size().y) + 22.0).max(40.0))
+            .map(|(k, h, v)| {
+                let left = k.size().y + if h.size().y > 0.0 { 4.0 + h.size().y } else { 0.0 };
+                (left.max(v.size().y) + 22.0).max(40.0)
+            })
             .collect();
         rows_card(ui, p, &heights, |ui, i, r| {
-            let (kg, vg) = &laid[i];
+            let (kg, hg, vg) = &laid[i];
             let painter = ui.painter();
-            painter.galley(
-                pos2(r.left() + 16.0, r.center().y - kg.size().y / 2.0),
-                kg.clone(),
-                p.ink,
-            );
+            let left = kg.size().y + if hg.size().y > 0.0 { 4.0 + hg.size().y } else { 0.0 };
+            let top = r.center().y - left / 2.0;
+            painter.galley(pos2(r.left() + 16.0, top), kg.clone(), p.ink);
+            if hg.size().y > 0.0 {
+                painter.galley(pos2(r.left() + 16.0, top + kg.size().y + 4.0), hg.clone(), p.ink_3);
+            }
             painter.galley(
                 pos2(r.left() + 208.0, r.center().y - vg.size().y / 2.0),
                 vg.clone(),
@@ -1705,10 +1712,10 @@ fn about(ui: &mut Ui, p: &Palette) {
     licences(
         ui,
         &[
-            ("KJV", "Public domain (Crown letters patent in the UK)"),
-            ("WEB", "Public domain · “World English Bible” is a trademark of eBible.org"),
-            ("BSB", "Dedicated to the public domain, 2023"),
-            ("ASV · YLT · DBY · WBS", "Public domain"),
+            ("KJV", "", "Public domain (Crown letters patent in the UK)"),
+            ("WEB", "", "Public domain · “World English Bible” is a trademark of eBible.org"),
+            ("BSB", "", "Dedicated to the public domain, 2023"),
+            ("ASV · YLT · DBY · WBS", "", "Public domain"),
         ],
     );
     ui.add_space(8.0);
@@ -1716,17 +1723,25 @@ fn about(ui: &mut Ui, p: &Palette) {
     ui.add_space(24.0);
     // Everything else that someone else made, from the one list the phone shows too.
     group_title(ui, p, "Study tools and voice");
-    let study: Vec<(&str, &str)> = bible_core::credits::all()
+    let study: Vec<(&str, &str, &str)> = bible_core::credits::all()
         .iter()
         .filter(|c| !matches!(c.work, "Bible translations" | "Literata" | "Inter"))
-        .map(|c| (c.work, c.licence))
+        .map(|c| (c.work, c.holder, c.licence))
         .collect();
     licences(ui, &study);
     ui.add_space(8.0);
     footnote(ui, p, "Full licence texts ship inside the app, in Contents/Resources/LICENSES.");
     ui.add_space(24.0);
     group_title(ui, p, "Fonts");
-    licences(ui, &[("Literata", "SIL Open Font License 1.1"), ("Inter", "SIL Open Font License 1.1")]);
+    licences(
+        ui,
+        &[
+            ("Literata", "Google Fonts", "SIL Open Font License 1.1"),
+            ("Inter", "Rasmus Andersson", "SIL Open Font License 1.1"),
+        ],
+    );
+    ui.add_space(24.0);
+    footnote(ui, p, "Lamplit, by Mark Trent. Based on bible-rs by Micky.");
     ui.add_space(24.0);
 }
 
