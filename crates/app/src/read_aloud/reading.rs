@@ -121,7 +121,7 @@ impl Reading {
         let held = self.held.lock().ok().and_then(|held| *held);
         let seconds = held.or_else(|| match self.sleep() {
             Sleep::Minutes(minutes) => Some(minutes as f32 * 60.0),
-            Sleep::Off => None,
+            Sleep::Off | Sleep::Continuous => None,
         });
         self.start_timer(seconds);
     }
@@ -157,7 +157,7 @@ impl Reading {
             if let Ok(mut held) = self.held.lock() {
                 *held = match sleep {
                     Sleep::Minutes(minutes) => Some(minutes as f32 * 60.0),
-                    Sleep::Off => None,
+                    Sleep::Off | Sleep::Continuous => None,
                 };
             }
             self.disarm();
@@ -168,7 +168,7 @@ impl Reading {
     pub fn arm(&self) {
         match self.sleep() {
             Sleep::Minutes(minutes) => self.arm_for(minutes as u64 * 60),
-            Sleep::Off => self.disarm(),
+            Sleep::Off | Sleep::Continuous => self.disarm(),
         }
     }
 
@@ -339,7 +339,15 @@ fn make(making: Making<'_>, out: std::sync::mpsc::SyncSender<Result<Heard, Strin
                 // The chapter has been read. With time still on the timer, carry on into the next one;
                 // without a timer there is nothing to carry on for.
                 let Some(supplier) = next else { return };
-                if left_on(deadline).is_none() {
+                // The chapter has been read. "Keep reading" asks for the next one outright; a timer
+                // carries on only while there is time left on the clock to fill.
+                let sleep = session.lock().map(|guard| guard.sleep()).unwrap_or_default();
+                let carry_on = match sleep {
+                    Sleep::Continuous => true,
+                    Sleep::Minutes(_) => left_on(deadline).is_some(),
+                    Sleep::Off => false,
+                };
+                if !carry_on {
                     return;
                 }
                 let Some((ahead, fresh)) = supplier(at) else { return };

@@ -28,6 +28,8 @@ pub struct Listen {
     /// The chapter being read: where the bar's label and the verse the page follows come from.
     at: ChapterIdx,
     timer_open: bool,
+    /// What the reader last chose from the timer menu, kept when the bar is closed and reopened.
+    chosen: Sleep,
     /// Where the stopwatch was drawn last frame, so a press on it does not close its own menu.
     timer_anchor: Rect,
     /// Where the menu was drawn, for telling a press inside it from one outside.
@@ -58,6 +60,7 @@ impl Listen {
             reading: None,
             at: ChapterIdx::FIRST,
             timer_open: false,
+            chosen: Sleep::default(),
             timer_anchor: Rect::NOTHING,
             menu_rect: Rect::NOTHING,
             preview: None,
@@ -134,9 +137,19 @@ impl Listen {
     }
 
     pub fn set_sleep(&mut self, sleep: Sleep) {
+        self.chosen = sleep;
+        // A shot's pretend countdown is not the reader's choice: once a row is chosen the menu
+        // shows what was chosen, not the preview's fifteen minutes.
+        self.preview_left = None;
         if let Some(reading) = &self.reading {
             reading.choose(sleep);
         }
+    }
+
+    /// The choice the reader last made here, whether or not a reading is running: the app keeps it
+    /// on this device, so "Keep reading" and a fifteen-minute timer survive a restart.
+    pub fn sleep_choice(&self) -> Sleep {
+        self.chosen
     }
 
     /// What is left on the timer, if one is armed: straight off the clock.
@@ -189,7 +202,7 @@ impl Listen {
         // picture of something the app cannot actually do.
         match self.preview_left {
             Some(_) if self.preview.is_some() => Sleep::Minutes(15),
-            _ => Sleep::default(),
+            _ => self.chosen,
         }
     }
 
@@ -412,8 +425,7 @@ impl Listen {
             self.timer_open = false;
             return;
         }
-        let choices =
-            [Sleep::Minutes(15), Sleep::Minutes(30), Sleep::Minutes(45), Sleep::Minutes(60), Sleep::Off];
+        let choices = Sleep::CHOICES;
         let width = 236.0;
         let row = 32.0;
         let height = row * choices.len() as f32 + 34.0;
@@ -476,6 +488,7 @@ fn sleep_label(sleep: Sleep) -> String {
     match sleep {
         Sleep::Minutes(minutes) => format!("{minutes} min"),
         Sleep::Off => "End of chapter".to_string(),
+        Sleep::Continuous => "Keep reading".to_string(),
     }
 }
 

@@ -49,6 +49,10 @@ pub struct Settings {
     /// anything moving on the page distracting.
     #[serde(default = "yes")]
     pub speak_tint: bool,
+    /// Read aloud: when the reading stops by itself. Kept so a reader who chose "Keep reading"
+    /// does not have to choose it again every time the app opens.
+    #[serde(default)]
+    pub read_aloud_sleep: bible_core::speak::Sleep,
     pub flash_jumps: bool,
     /// Data: what exports include (highlights, notes, bookmarks, history), and automatic
     /// backups (on, and weekly rather than daily).
@@ -86,6 +90,8 @@ impl Default for Settings {
             sidebar_open: false,
             sidebar_tab: SidebarTab::Books,
             theme_system: false,
+            // Reading aloud stops at the end of the chapter unless the reader asks otherwise.
+            read_aloud_sleep: bible_core::speak::Sleep::Off,
             // John 1 is a friendlier first page than Genesis 1.
             chapter: ChapterIdx::new(BookId(42), 1).unwrap().0,
             verse: 1,
@@ -1505,8 +1511,8 @@ impl BibleApp {
         }
         let book = chapter.book().name();
         let number = chapter.chapter() as u16;
-        let session =
-            bible_core::speak::Session::new(book, number, &verses, bible_core::speak::Sleep::default());
+        let chosen = self.settings.read_aloud_sleep;
+        let session = bible_core::speak::Session::new(book, number, &verses, chosen);
         // With time left on the sleep timer, the reading carries on into the next chapter rather than
         // stopping short of the time the reader asked for.
         let text = text.clone();
@@ -1516,12 +1522,15 @@ impl BibleApp {
                 at.book().name(),
                 at.chapter() as u16,
                 &verses,
-                bible_core::speak::Sleep::default(),
+                chosen,
             );
             session.play();
             Some((at, session))
         });
         self.listen.begin(session, self.settings.voice(), chapter, Some(next));
+        // A remembered "Keep reading" or timer is in force from the first word, not after the menu
+        // has been opened once.
+        self.listen.set_sleep(chosen);
     }
 
     /// The toolbar over the reading area (`ds-06` in the design): back/forward (after the
@@ -2756,6 +2765,12 @@ impl eframe::App for BibleApp {
                         reader_rect.max,
                     );
                     self.listen.show(&mut reader_ui, p, area);
+                    // The bar is the only place the choice is made, so it is the place it is read
+                    // from: whatever the menu ticked is what this device remembers.
+                    let choice = self.listen.sleep_choice();
+                    if self.settings.read_aloud_sleep != choice {
+                        self.settings.read_aloud_sleep = choice;
+                    }
                     // The page follows the voice while there is one, and only then.
                     if let Some(at) = self.listen.following() {
                         self.reader.follow(at, now);

@@ -7,24 +7,39 @@
 use super::text::{Utterance, chapter as script_of};
 
 /// When the reading stops by itself.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Sleep {
     /// Read the chapter to its end and stop, which is what reading always does.
     #[default]
     Off,
     /// Stop at this time on the clock, fading the verse in progress.
     Minutes(u32),
+    /// Walk on into the next chapter, and the one after, until the reading is stopped.
+    Continuous,
 }
 
 impl Sleep {
     /// The choices the menu offers, in the order it shows them.
-    pub const CHOICES: [Sleep; 5] =
-        [Sleep::Minutes(15), Sleep::Minutes(30), Sleep::Minutes(45), Sleep::Minutes(60), Sleep::Off];
+    pub const CHOICES: [Sleep; 6] = [
+        Sleep::Off,
+        Sleep::Minutes(15),
+        Sleep::Minutes(30),
+        Sleep::Minutes(45),
+        Sleep::Minutes(60),
+        Sleep::Continuous,
+    ];
+
+    /// Whether the reading should walk into the next chapter when this one ends. A timer keeps
+    /// reading because there is still time to fill; "Keep reading" needs no other reason.
+    pub fn keeps_reading(self) -> bool {
+        matches!(self, Sleep::Continuous | Sleep::Minutes(_))
+    }
 
     pub fn label(self) -> String {
         match self {
             Sleep::Off => "End of chapter".to_string(),
             Sleep::Minutes(m) => format!("{m} minutes"),
+            Sleep::Continuous => "Keep reading".to_string(),
         }
     }
 }
