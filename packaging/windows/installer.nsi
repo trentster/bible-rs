@@ -23,7 +23,7 @@ RequestExecutionLevel user
 !include "FileFunc.nsh"
 
 !define NAME "Bible"
-!define PUBLISHER "Fabrika LLC"
+!define PUBLISHER "Lamplit"
 !define EXE "bible-rs.exe"
 !define UNINSTALLER "Uninstall Bible.exe"
 !define UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\bible-rs"

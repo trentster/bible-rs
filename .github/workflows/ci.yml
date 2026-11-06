@@ -84,7 +84,7 @@ jobs:
           "${setup[0]}" //S
           ls -l "$dir" "$link"
           reg query "$key" | tee reg.txt
-          grep -q 'Publisher.*Fabrika LLC' reg.txt
+          grep -q 'Publisher.*Lamplit' reg.txt
           BIBLE_RS_HOME="$(mktemp -d)" BIBLE_RS_STARTUP_PROBE=1 timeout 120 "$dir/bible-rs.exe" | tail -1
           # The app's own update (WINDOWS.md, "Updates"): it starts the installer with /S /RELAUNCH
           # and quits; the installer waits for it to close, replaces it and opens it again.

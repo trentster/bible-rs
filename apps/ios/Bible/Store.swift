@@ -353,7 +353,7 @@ final class Store {
 }
 
 enum Log {
-    static let app = Logger(subsystem: "dev.bible-rs.ios", category: "app")
+    static let app = Logger(subsystem: "au.com.onyxit.lamplit.dev", category: "app")
 }
 
 /// Time since the process started, for launch measurements.

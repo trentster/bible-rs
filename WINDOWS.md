@@ -8,8 +8,9 @@ The Windows app is the Mac app built for Windows. It has the same reader, search
 themes and data format, from the same code. It runs on 64-bit Windows 10 and Windows 11.
 
 Builds are **unsigned** for now. CI makes an installer on every push, as a workflow artifact;
-nothing is attached to GitHub Releases yet. Signing needs a certificate that only Fabrika LLC can
-get ([Signing](#signing)).
+nothing is attached to GitHub Releases yet. Signing needs a publisher certificate this fork does
+not have ([Signing](#signing)); the steps below are upstream's, kept for anyone who builds Windows
+from this tree.
 
 ## Install
 
@@ -20,7 +21,7 @@ get ([Signing](#signing)).
    Choose **More info**, then **Run anyway**.
 3. The installer asks for no administrator rights. It installs for the current user into
    `%LOCALAPPDATA%\Programs\Bible`, adds **Bible** to the Start menu and to Settings › Apps ›
-   Installed apps (publisher Fabrika LLC), and can open the app when it finishes.
+   Installed apps (publisher Lamplit), and can open the app when it finishes.
 
 Uninstall from Settings › Apps, or with `"%LOCALAPPDATA%\Programs\Bible\Uninstall Bible.exe"`.
 Uninstalling keeps your notes, highlights, settings and API keys, as dragging the Mac app to the
@@ -128,7 +129,7 @@ warning, but the executable has no icon or version information.
 ## Signing
 
 Unsigned installers work, but SmartScreen blocks them until you choose "Run anyway", and some
-company PCs refuse them. Signing with a certificate in Fabrika LLC's name removes the warning
+company PCs refuse them. Signing with your own publisher certificate removes the warning
 (SmartScreen still learns a new certificate's reputation over the first downloads).
 
 `scripts/package-windows.sh` signs when `WINDOWS_SIGN_COMMAND` is set. It runs that command on
@@ -147,7 +148,7 @@ be done from the repository:
    [eligibility](https://learn.microsoft.com/azure/artifact-signing/) first: Microsoft decides
    which organizations and countries can get public-trust certificates.
 2. **Identity validation.** In the account, request **Public Trust** identity validation for
-   Fabrika LLC and wait for Microsoft to approve it (it checks the business's records).
+   the publisher named in packaging/windows/installer.nsi and wait for Microsoft to approve it.
 3. **Certificate profile.** Create a **Public Trust** certificate profile on that identity. Note
    the account name and the profile name.
 4. **Who may sign.** In Microsoft Entra ID, register an app (for example "bible-rs release"),
@@ -160,7 +161,7 @@ be done from the repository:
 6. Push a version tag. The release workflow's *windows* job then downloads signtool and the
    Artifact Signing client (pinned NuGet packages), signs the app, the uninstaller and the
    installer, and uploads **bible-rs-v<version>-windows-x64**. Check it on a Windows PC. The
-   installer's Properties › Digital Signatures tab should name Fabrika LLC.
+   installer's Properties › Digital Signatures tab should name your publisher.
 
 To sign on a Windows PC instead, install the signing tools
 (`winget install -e --id Microsoft.Azure.ArtifactSigningClientTools`), sign in with `az login`,
@@ -213,7 +214,7 @@ The website's download page links only the Mac disk image today.
   attached ([After signing](#after-signing)). Until then the app finds nothing to install.
 - **The installer's signature isn't checked yet.** The app checks the downloaded installer's size
   and SHA-256 against the release. Once installers are signed, it should also check that the
-  signature names Fabrika LLC before running one.
+  signature names your publisher before running one.
 - **Drop-down menus stay light in dark mode.** The menu bar follows the theme; Windows draws the
   menus under it in its light style.
 - **Windows 10 before version 20H1** keeps a light title bar in the dark theme.

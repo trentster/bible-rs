@@ -86,7 +86,7 @@ final class ReaderView: UIScrollView, UIScrollViewDelegate, UIGestureRecognizerD
 
     /// Typesetting a chapter takes a few milliseconds, enough to drop a frame mid-fling, so the
     /// chapter beyond each end of the window is typeset here before it's needed.
-    private let typesetQueue = DispatchQueue(label: "dev.bible-rs.ios.typeset", qos: .userInitiated)
+    private let typesetQueue = DispatchQueue(label: "au.com.onyxit.lamplit.dev.typeset", qos: .userInitiated)
     private var ahead: [Int: ChapterLayout] = [:]
     private var queued: Set<Int> = []
     /// Bumped when text, type or marks change, so work queued before is thrown away.

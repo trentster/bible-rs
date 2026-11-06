@@ -1,4 +1,4 @@
-# Bible on the App Store
+# Lamplit on the App Store
 
 How to get the iPhone and iPad app into the App Store, and what to paste into App Store Connect.
 The repository holds everything that doesn't need an Apple account: the privacy manifest, the
@@ -8,13 +8,15 @@ for its holder.
 
 ## Decide first
 
-The App Store name is **Bible: Fast & Offline**. The name under the icon, `CFBundleDisplayName`,
-stays "Bible". No live app in the US, UK, Canadian or Australian store used the name on 20
+The App Store name is **Lamplit**. The name under the icon, `CFBundleDisplayName`, is "Lamplit". No live app in the US, UK, Canadian or Australian store used the name on 20
 October 2026; App Store Connect confirms it's free when the record is created.
 
-1. **The bundle ID.** It's `dev.bible-rs.ios`, set as `BIBLE_BUNDLE_ID` in
+1. **The bundle ID.** Two of them, and Mark owns both. `au.com.onyxit.lamplit.dev` is what the app
+   carries now, for free cable installs on his phone. `au.com.onyxit.lamplit` is the store
+   identifier: it is created with his paid account at submission and must not be registered or used
+   before then. Both live in `BIBLE_BUNDLE_ID` in
    `Config/Bible.xcconfig`, and it can't change once the record exists. The Mac app is
-   `dev.bible-rs.app` and ships outside the store, so the two don't need to match.
+   `au.com.onyxit.lamplit.mac` and ships outside the store, so the two don't need to match.
 2. **The version.** The phone app takes its version from `Cargo.toml`, like the Mac, so it would
    launch as 0.2.0. The store accepts that; set 1.0.0 there first if you'd rather launch at 1.0.
 3. **The UK store.** The KJV is public domain everywhere except the UK, where the Crown's letters
@@ -25,17 +27,17 @@ October 2026; App Store Connect confirms it's free when the record is created.
 
 ## One-time setup
 
-1. **The app's record.** In App Store Connect, Apps, +, New App: platform iOS, name "Bible: Fast & Offline", primary
-   language English (U.S.), bundle ID `dev.bible-rs.ios`, SKU `bible-ios`. If the bundle ID isn't
+1. **The app's record.** In App Store Connect, Apps, +, New App: platform iOS, name "Lamplit", primary
+   language English (U.S.), bundle ID `au.com.onyxit.lamplit`, SKU `lamplit-ios`. If the bundle ID isn't
    in the list yet, register it first under Certificates, Identifiers & Profiles, Identifiers, as
    an explicit App ID with no capabilities.
-2. **Signing.** The team is Fabrika LLC, 5S3KCRYBD2, as on the Mac. The simplest route is to sign
+2. **Signing.** The team is Mark's own Apple Developer team, filled into `DEVELOPMENT_TEAM` in `Config/Local.xcconfig`. The simplest route is to sign
    in to Xcode with the Apple ID under Xcode, Settings, Accounts. `scripts/release-ios.sh` then
    lets xcodebuild create the Apple Distribution certificate and the App Store profile on first
    use. Without Xcode signed in, make an App Store Connect API key with the Admin role under Users
    and Access, Integrations, Team Keys, and set `ASC_KEY_PATH`, `ASC_KEY_ID` and `ASC_ISSUER_ID`
    for the script. Keep the `.p8` file out of the repository.
-3. **The website.** The listing links to `https://simplymybible.com/privacy` and `/support`. They
+3. **The website.** The listing links to `<domain>/privacy` and `<domain>/support` — the domain is Mark's to set at submission (PLACEHOLDER). They
    go live when the `site/` changes reach `main`, the site deploys and the domain is attached to
    the Vercel project; check both open before submitting.
 
@@ -58,13 +60,13 @@ October 2026; App Store Connect confirms it's free when the record is created.
 
 | Field | Text |
 |---|---|
-| Name | Bible: Fast & Offline |
+| Name | Lamplit |
 | Subtitle | Seven translations, built in |
 | Category | Reference (primary), Books (secondary) |
 | Price | Free |
-| Support URL | https://simplymybible.com/support |
-| Marketing URL | https://simplymybible.com |
-| Privacy Policy URL | https://simplymybible.com/privacy |
+| Support URL | `<domain>/support` (PLACEHOLDER) |
+| Marketing URL | `<domain>` (PLACEHOLDER) |
+| Privacy Policy URL | `<domain>/privacy` (PLACEHOLDER) |
 | Copyright | 2026 Micky |
 | Keywords | `kjv,scripture,holy,verse,study,psalms,gospel,web,bsb,asv,devotional,notes,highlight,daily,christian` |
 
@@ -103,7 +105,7 @@ King James Version, World English Bible, Berean Standard Bible, American Standar
 PRIVATE
 No account, no ads, no analytics and no tracking. Bible never goes online, and your notes stay on your device.
 
-Bible is also on the Mac: simplymybible.com
+Lamplit is also on the Mac: `<domain>/download` (PLACEHOLDER)
 ```
 
 **What's New** for the first version: `The first release of Bible for iPhone and iPad.`
@@ -149,7 +151,7 @@ Add your name, phone number and email as the review contact.
 
 ## Before submitting
 
-- [ ] `/privacy` and `/support` open on simplymybible.com
+- [ ] `/privacy` and `/support` open on Mark's domain (PLACEHOLDER)
 - [ ] The TestFlight build works on a real iPhone and iPad, in both orientations
 - [ ] Screenshots, description, keywords, URLs and the review notes are filled in for the version
 - [ ] App Privacy, age rating, content rights and Pricing and Availability are answered

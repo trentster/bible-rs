@@ -3,7 +3,10 @@
 # to make Bible.xcodeproj; none of those three are checked in.
 name: Bible
 options:
-  bundleIdPrefix: dev.bible-rs
+  # Only a fallback: every target sets PRODUCT_BUNDLE_IDENTIFIER from $(BIBLE_BUNDLE_ID), which is
+  # the single setting in Config/Bible.xcconfig. Kept in step with it so a stray default can't
+  # produce an upstream-looking identifier.
+  bundleIdPrefix: au.com.onyxit.lamplit.dev
   deploymentTarget:
     iOS: "17.0"
   createIntermediateGroups: true

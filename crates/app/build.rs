@@ -180,7 +180,7 @@ fn collect(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
     }
 }
 
-/// The Windows executable's icon, version information (publisher Fabrika LLC, the copyright
+/// The Windows executable's icon, version information (the publisher named in `packaging/windows`,
 /// line of LICENSE, as the macOS bundle has) and manifest, from `packaging/windows`.
 ///
 /// Building on Windows needs the Windows SDK's rc.exe (part of Visual Studio's C++ tools) or
@@ -224,7 +224,7 @@ BEGIN
   BEGIN
     BLOCK "040904b0"
     BEGIN
-      VALUE "CompanyName", "Fabrika LLC"
+      VALUE "CompanyName", "packaging/windows/installer.nsi"
       VALUE "FileDescription", "Bible"
       VALUE "FileVersion", "{version}"
       VALUE "InternalName", "bible-rs"

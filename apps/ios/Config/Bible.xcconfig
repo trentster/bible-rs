@@ -3,8 +3,12 @@
 //
 //   DEVELOPMENT_TEAM = ABCDE12345
 //   BIBLE_BUNDLE_ID = com.example.bible
-// Mark has not chosen the final identifier; it cannot change once the App Store record exists.
-BIBLE_BUNDLE_ID = au.com.onyxit.lamplit
+// ONE SETTING, ONE LINE. Mark's identifiers:
+//   now, free cable installs on his phone:  au.com.onyxit.lamplit.dev
+//   TestFlight and the App Store, later:    au.com.onyxit.lamplit
+// The store identifier is created with Mark's paid account and must not be registered or used
+// before then, so the dev build carries the .dev one. Switching is this line and nothing else.
+BIBLE_BUNDLE_ID = au.com.onyxit.lamplit.dev
 DEVELOPMENT_TEAM =
 CODE_SIGN_STYLE = Automatic
 
