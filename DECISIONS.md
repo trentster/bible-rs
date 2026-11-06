@@ -753,3 +753,21 @@ other way to speak HTTPS. **The iPhone app must not copy that.** Apple's `URLSes
 the device, already updated with the OS, and adds no encryption code to the binary, which also
 keeps the export-compliance question to the one Apple asks about standard HTTPS. Whatever the iOS
 voice download is written in, the rule is the same: the app ships no TLS implementation of its own.
+
+## No keep-awake, and the timer's eight choices
+
+Mark's decision: Lamplit does not hold the Mac awake, and no code is added to do it. If the system
+sleeps mid-chapter, it sleeps. The cost is real and accepted: "Keep reading" and the 2-hour timer
+can both be cut short by system sleep.
+
+The sleep timer now offers, in this order: **End of chapter** (the default), 5, 15, 30, 45 and 60
+minutes, **2 hours**, and **Keep reading**. The last choice is remembered per device, in the settings
+file. A cut-off reading still finishes the sentence it is in and fades.
+
+On keep-awake and audio, what was actually measured and what was not: a plain Core Audio player
+holds the assertion — `pid 481(coreaudiod) … PreventUserIdleSystemSleep named:
+"com.apple.audio.BuiltInSpeakerDevice.context.preventuseridlesleep"`, created for the playing PID,
+`Resources: audio-out BuiltInSpeakerDevice`. Lamplit plays through `cpal`, which is Core Audio, so
+the same assertion is expected while it reads. It has not been observed for Lamplit itself: this
+host cannot bring up the app's window or make it speak, so the check has to be made on the Mac that
+is running it (`pmset -g assertions` with a reading in progress).
