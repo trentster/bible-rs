@@ -242,7 +242,9 @@ check_plist LSMinimumSystemVersion "$MIN_MACOS"
 check_plist LSApplicationCategoryType public.app-category.reference
 check_plist CFBundleIconFile AppIcon
 printf '%-30s %s\n' NSHumanReadableCopyright "$(plist NSHumanReadableCopyright)"
-[[ "$(plist NSHumanReadableCopyright)" == Copyright\ ©\ 2* ]] || die "Info.plist has no copyright line"
+# A copyright line, however it opens: the old wording began "Copyright ©", and the
+# panel now opens with the holder, which is what a reader looks for.
+[[ "$(plist NSHumanReadableCopyright)" == *"© 2"* ]] || die "Info.plist has no copyright line"
 [[ -s "$APP/Contents/Resources/AppIcon.icns" ]] || die "AppIcon.icns is missing"
 
 codesign --verify --deep --strict --verbose=2 "$APP"
