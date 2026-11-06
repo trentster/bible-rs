@@ -429,10 +429,10 @@ impl Listen {
         let width = 236.0;
         let row = 32.0;
         let height = row * choices.len() as f32 + 34.0;
-        let rect = Rect::from_min_size(
-            Pos2::new(anchor.right() - INSET - width, anchor.top() - height - 8.0),
-            Vec2::new(width, height),
-        );
+        // Eight choices now, so a short window could otherwise push the menu off the top.
+        let top = (anchor.top() - height - 8.0).max(8.0);
+        let rect =
+            Rect::from_min_size(Pos2::new(anchor.right() - INSET - width, top), Vec2::new(width, height));
         self.menu_rect = rect;
         p.shadows.popover.paint(ui.painter(), rect, 12.0);
         ui.painter().rect_filled(rect, 12.0, p.paper);
@@ -486,6 +486,7 @@ fn clock(seconds: f32) -> String {
 
 fn sleep_label(sleep: Sleep) -> String {
     match sleep {
+        Sleep::Minutes(120) => "2 hours".to_string(),
         Sleep::Minutes(minutes) => format!("{minutes} min"),
         Sleep::Off => "End of chapter".to_string(),
         Sleep::Continuous => "Keep reading".to_string(),

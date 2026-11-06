@@ -1723,11 +1723,7 @@ fn about(ui: &mut Ui, p: &Palette) {
             if hg.size().y > 0.0 {
                 painter.galley(pos2(r.left() + 16.0, top + kg.size().y + 4.0), hg.clone(), p.ink_3);
             }
-            painter.galley(
-                pos2(r.left() + 208.0, r.center().y - vg.size().y / 2.0),
-                vg.clone(),
-                p.ink_2,
-            );
+            painter.galley(pos2(r.left() + 208.0, r.center().y - vg.size().y / 2.0), vg.clone(), p.ink_2);
         });
     };
     group_title(ui, p, "Translations");

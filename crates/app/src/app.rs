@@ -470,11 +470,7 @@ impl BibleApp {
             #[cfg(target_os = "macos")]
             no_drag: Default::default(),
             #[cfg(target_os = "macos")]
-            menu: if crate::offscreen() {
-                None
-            } else {
-                crate::macos_menu::AppMenu::install(&cc.egui_ctx)
-            },
+            menu: if crate::offscreen() { None } else { crate::macos_menu::AppMenu::install(&cc.egui_ctx) },
             #[cfg(windows)]
             menu: if crate::offscreen() {
                 None
@@ -1538,12 +1534,8 @@ impl BibleApp {
         let text = text.clone();
         let next: crate::read_aloud::NextChapter = std::sync::Arc::new(move |after| {
             let (at, verses) = crate::read_aloud::next_chapter_text(&text, after)?;
-            let mut session = bible_core::speak::Session::new(
-                at.book().name(),
-                at.chapter() as u16,
-                &verses,
-                chosen,
-            );
+            let mut session =
+                bible_core::speak::Session::new(at.book().name(), at.chapter() as u16, &verses, chosen);
             session.play();
             Some((at, session))
         });

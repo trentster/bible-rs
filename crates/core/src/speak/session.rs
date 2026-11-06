@@ -20,12 +20,14 @@ pub enum Sleep {
 
 impl Sleep {
     /// The choices the menu offers, in the order it shows them.
-    pub const CHOICES: [Sleep; 6] = [
+    pub const CHOICES: [Sleep; 8] = [
         Sleep::Off,
+        Sleep::Minutes(5),
         Sleep::Minutes(15),
         Sleep::Minutes(30),
         Sleep::Minutes(45),
         Sleep::Minutes(60),
+        Sleep::Minutes(120),
         Sleep::Continuous,
     ];
 
@@ -38,6 +40,7 @@ impl Sleep {
     pub fn label(self) -> String {
         match self {
             Sleep::Off => "End of chapter".to_string(),
+            Sleep::Minutes(120) => "2 hours".to_string(),
             Sleep::Minutes(m) => format!("{m} minutes"),
             Sleep::Continuous => "Keep reading".to_string(),
         }
