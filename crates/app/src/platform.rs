@@ -42,9 +42,9 @@ pub const KEY_SAVED: &str = if cfg!(target_os = "macos") {
 
 /// The About pane's line under the tagline: what the app promises about the network, in one line.
 pub const OFFLINE_LINE: &str = if cfg!(target_os = "macos") {
-    "Works entirely offline · nothing leaves this Mac unless you share it"
+    "Works offline · the reading voice downloads once, when you ask · nothing leaves this Mac"
 } else {
-    "Works entirely offline · nothing leaves this device unless you share it"
+    "Works offline · the reading voice downloads once, when you ask · nothing leaves this device"
 };
 
 /// The About pane's line under the version.
