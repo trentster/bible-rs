@@ -53,24 +53,24 @@ pub struct SettingsUi {
 static OPENED: std::sync::Mutex<Option<std::time::Instant>> = std::sync::Mutex::new(None);
 
 fn trace(point: &str) {
-    let Ok(opened) = OPENED.lock() else { return };
-    let line = match *opened {
-        Some(at) => format!("settings: {point} at {:.0} ms", at.elapsed().as_secs_f64() * 1000.0),
-        None => format!("settings: {point} (no clock)"),
-    };
-    if std::env::var_os("BIBLE_RS_TRACE_SETTINGS").is_some() {
-        eprintln!("{line}");
+    if std::env::var_os("BIBLE_RS_TRACE_SETTINGS").is_none() {
+        return;
     }
-    // Test build: always, so the log can be sent without a Terminal.
-    crate::trace_file(&line);
+    let Ok(opened) = OPENED.lock() else { return };
+    match *opened {
+        Some(at) => eprintln!("settings: {point} at {:.0} ms", at.elapsed().as_secs_f64() * 1000.0),
+        None => eprintln!("settings: {point} (no clock)"),
+    }
 }
 
 impl SettingsUi {
     pub fn new(tab: SettingsTab) -> Self {
-        if let Ok(mut opened) = OPENED.lock() {
-            *opened = Some(std::time::Instant::now());
+        if std::env::var_os("BIBLE_RS_TRACE_SETTINGS").is_some() {
+            if let Ok(mut opened) = OPENED.lock() {
+                *opened = Some(std::time::Instant::now());
+            }
+            trace("asked for");
         }
-        trace("asked for");
         Self {
             tab,
             show_all_bundled: false,
