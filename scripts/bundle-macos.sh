@@ -22,7 +22,7 @@ if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
 fi
 # The copyright the About panel shows. Micky's full notice stays in the Acknowledgements and in
 # LICENSES/ — this line states what Lamplit is built on, and whose app it now is.
-COPYRIGHT="© 2026 Mark Trent. Based on bible-rs by Micky, MIT License. Bundled translations are public domain."
+COPYRIGHT="© 2026 Mark Trent. Based on bible-rs, MIT License. Bundled translations are public domain."
 # Mark has not chosen the final identifier; it cannot change once an App Store record exists.
 MAC_BUNDLE_ID="${MAC_BUNDLE_ID:-au.com.onyxit.lamplit.mac}"
 APP="dist/Lamplit.app"
