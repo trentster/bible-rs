@@ -1759,7 +1759,7 @@ fn about(ui: &mut Ui, p: &Palette) {
         ],
     );
     ui.add_space(24.0);
-    footnote(ui, p, "Lamplit, by Mark Trent. Based on bible-rs by Micky.");
+    footnote(ui, p, "Lamplit, by Mark Trent. Based on bible-rs, MIT License.");
     ui.add_space(24.0);
 }
 
