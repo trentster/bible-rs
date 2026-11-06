@@ -2559,6 +2559,15 @@ impl eframe::App for BibleApp {
             crate::trace(self.startup.t0, &format!("frame {} start", self.startup.frames));
         }
         let ctx = ui.ctx().clone();
+        // `BIBLE_RS_TRACE_SETTINGS=1`: a frame arriving long after the last one is where a late
+        // Settings actually shows up. The panel itself is drawn in tens of milliseconds, so if the
+        // app is busy for seconds, it is happening here, between frames.
+        if std::env::var_os("BIBLE_RS_TRACE_SETTINGS").is_some() {
+            let gap = ctx.input(|i| i.unstable_dt);
+            if gap > 0.25 {
+                eprintln!("frame: {:.0} ms since the last frame began", gap * 1000.0);
+            }
+        }
         if let Some(sp) = &mut self.scroll_probe {
             // ~2,200 px/s at 60 fps: a fast, continuous fling through many chapters.
             if self.startup.frames > 2 {
