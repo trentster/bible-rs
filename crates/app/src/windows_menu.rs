@@ -35,7 +35,6 @@ fn item(id: &str, label: &str, accel: Option<&str>) -> MenuItem {
 }
 
 /// Ids of the items chosen since the last frame.
-static CHOSEN: Mutex<Vec<String>> = Mutex::new(Vec::new());
 
 fn theme(dark: bool) -> MenuTheme {
     if dark { MenuTheme::Dark } else { MenuTheme::Light }
@@ -130,8 +129,7 @@ impl AppMenu {
         menu.append_items(&[&file, &view, &go, &help]).ok()?;
         let ctx: egui::Context = cc.egui_ctx.clone();
         MenuEvent::set_event_handler(Some(move |event: MenuEvent| {
-            CHOSEN.lock().unwrap_or_else(|e| e.into_inner()).push(event.id.0);
-            ctx.request_repaint();
+            crate::native_menu::chosen(event.id.0.clone(), &ctx);
         }));
         let before = client_size(hwnd as HWND);
         // SAFETY: winit's live window, on the thread that created it (the app's main thread).
@@ -160,8 +158,7 @@ impl AppMenu {
 
     /// Drains menu clicks into this frame's actions.
     pub fn poll(&self, actions: &mut Vec<Action>) {
-        let chosen = std::mem::take(&mut *CHOSEN.lock().unwrap_or_else(|e| e.into_inner()));
-        actions.extend(chosen.iter().filter_map(|id| crate::native_menu::action(id)));
+        crate::native_menu::poll(actions);
     }
 
     /// Draws the bar light or dark, to match the app's theme.

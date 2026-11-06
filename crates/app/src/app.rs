@@ -470,7 +470,11 @@ impl BibleApp {
             #[cfg(target_os = "macos")]
             no_drag: Default::default(),
             #[cfg(target_os = "macos")]
-            menu: if crate::offscreen() { None } else { crate::macos_menu::AppMenu::install() },
+            menu: if crate::offscreen() {
+                None
+            } else {
+                crate::macos_menu::AppMenu::install(&cc.egui_ctx)
+            },
             #[cfg(windows)]
             menu: if crate::offscreen() {
                 None

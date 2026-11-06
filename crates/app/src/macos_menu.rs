@@ -5,6 +5,7 @@
 //! There is no Edit menu on purpose: AppKit's predefined copy/paste items would swallow ⌘C/⌘V
 //! before egui's text fields see them (verse copying is ⌘C handled by the app itself).
 
+use eframe::egui;
 use muda::accelerator::Accelerator;
 use muda::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 
@@ -20,7 +21,11 @@ fn item(id: &str, label: &str, accel: Option<&str>) -> MenuItem {
 
 impl AppMenu {
     /// Builds the menu bar and installs it as the application menu.
-    pub fn install() -> Option<Self> {
+    ///
+    /// The context is what an item click uses to wake the app: AppKit delivers a menu choice on its
+    /// own thread with no frame running, so without a repaint request an idle app would not notice
+    /// the click until something else happened to draw.
+    pub fn install(ctx: &egui::Context) -> Option<Self> {
         let menu = Menu::new();
         let app = Submenu::with_items(
             "Lamplit",
@@ -101,6 +106,12 @@ impl AppMenu {
         )
         .ok()?;
         menu.append_items(&[&app, &file, &view, &go, &window, &help]).ok()?;
+        // Setting a handler takes over from muda's own channel: `MenuEvent::receiver()` goes quiet
+        // once one is installed, which is why the queue in `native_menu` is drained instead.
+        let ctx = ctx.clone();
+        muda::MenuEvent::set_event_handler(Some(move |event: muda::MenuEvent| {
+            crate::native_menu::chosen(event.id.0.clone(), &ctx);
+        }));
         menu.init_for_nsapp();
         window.set_as_windows_menu_for_nsapp();
         Some(Self { _menu: menu })
