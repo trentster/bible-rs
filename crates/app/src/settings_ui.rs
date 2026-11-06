@@ -49,8 +49,28 @@ pub struct SettingsUi {
     confirm_erase: bool,
 }
 
+/// When Settings was asked for, so `BIBLE_RS_TRACE_SETTINGS=1` can print how long each step took.
+static OPENED: std::sync::Mutex<Option<std::time::Instant>> = std::sync::Mutex::new(None);
+
+fn trace(point: &str) {
+    if std::env::var_os("BIBLE_RS_TRACE_SETTINGS").is_none() {
+        return;
+    }
+    let Ok(opened) = OPENED.lock() else { return };
+    match *opened {
+        Some(at) => eprintln!("settings: {point} at {:.0} ms", at.elapsed().as_secs_f64() * 1000.0),
+        None => eprintln!("settings: {point} (no clock)"),
+    }
+}
+
 impl SettingsUi {
     pub fn new(tab: SettingsTab) -> Self {
+        if std::env::var_os("BIBLE_RS_TRACE_SETTINGS").is_some() {
+            if let Ok(mut opened) = OPENED.lock() {
+                *opened = Some(std::time::Instant::now());
+            }
+            trace("asked for");
+        }
         Self {
             tab,
             show_all_bundled: false,
@@ -510,6 +530,7 @@ impl SettingsUi {
                 builder.with_fullsize_content_view(true).with_titlebar_shown(false).with_title_shown(false);
         }
         ctx.show_viewport_immediate(egui::ViewportId::from_hash_of("settings"), builder, |ui, _class| {
+            trace("viewport closure entered");
             #[cfg(target_os = "macos")]
             crate::macos_window::unify_window_titled("Settings");
             if ui.ctx().input(|i| i.viewport().close_requested() || i.key_pressed(egui::Key::Escape))
@@ -523,6 +544,7 @@ impl SettingsUi {
             let rect = ui.max_rect();
             let mut child = ui.new_child(egui::UiBuilder::new().max_rect(rect));
             self.window(&mut child, library, settings, study, actions, import);
+            trace("first frame drawn");
         });
         open
     }

@@ -289,6 +289,8 @@ pub struct BibleApp {
     palette: Option<CommandPalette>,
     pub panel: Option<VersePanel>,
     settings_ui: Option<SettingsUi>,
+    /// When Settings was asked for, for the open-time trace.
+    settings_opened_at: Option<std::time::Instant>,
     shortcuts_open: bool,
     shortcuts_overlay: crate::shortcuts_overlay::ShortcutsOverlay,
     /// The compact toolbar's More menu: open it next frame (demo), and its keyboard item.
@@ -421,6 +423,7 @@ impl BibleApp {
             palette: None,
             panel: None,
             settings_ui: None,
+            settings_opened_at: None,
             shortcuts_open: false,
             shortcuts_overlay: Default::default(),
             open_more: false,
@@ -976,7 +979,15 @@ impl BibleApp {
                 self.settings.sidebar_open = true;
                 self.settings.sidebar_tab = t;
             }
-            Action::OpenSettings(tab) => self.settings_ui = Some(SettingsUi::new(tab)),
+            Action::OpenSettings(tab) => {
+                // `BIBLE_RS_TRACE_SETTINGS=1`: the clock starts at the click, so the log Mark sends
+                // covers the whole wait — the window, its surface and the first frame drawn.
+                if std::env::var_os("BIBLE_RS_TRACE_SETTINGS").is_some() {
+                    self.settings_opened_at = Some(std::time::Instant::now());
+                    eprintln!("settings: opened from the menu");
+                }
+                self.settings_ui = Some(SettingsUi::new(tab));
+            }
             Action::FontSize(d) => self.settings.typo.size = (self.settings.typo.size + d).clamp(12.0, 34.0),
             Action::FontReset => self.settings.typo.size = Typography::default().size,
             Action::SetTheme(t) => {
@@ -1140,6 +1151,11 @@ impl BibleApp {
                 let (c, _) = self.reader.location;
                 self.listen.show_preview_span(verse, until, left, c);
             }
+            // `read`: start reading aloud, as the Read Aloud button does. A demo with no pointer
+            // cannot press Play, and a reading that never starts is a reading whose assertions,
+            // audio and chapter walk cannot be watched from outside the app.
+            #[cfg(feature = "speak")]
+            "read" => self.apply_one(ctx, Action::Listen),
             // `wait`: hold a frame, so a later step sees the page settled.
             "wait" => {}
             // `scroll:<dy>`: the reader scrolled, as a wheel or trackpad does.
