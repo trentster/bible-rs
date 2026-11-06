@@ -3,6 +3,7 @@
 //! renders offscreen (screenshots) it fills the main window instead.
 
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use bible_core::library::{EntryKind, Library};
 use bible_core::model::Origin;
@@ -1665,22 +1666,37 @@ fn about(ui: &mut Ui, p: &Palette) {
     centred(r.top() + 188.0, 20.0, crate::platform::OFFLINE_LINE, theme::ui_font(13.0), p.ink_3, 0.0);
     ui.add_space(24.0);
 
+    // Names and licences wrap inside their columns rather than running into each other: a credit
+    // that collides with its own licence reads as a mistake, and at the window's narrowest some of
+    // these words are wide ("Ark of the Covenant specs and 3D models").
     let licences = |ui: &mut Ui, rows: &[(&str, &str)]| {
-        rows_card(ui, p, &vec![40.0; rows.len()], |ui, i, r| {
-            let (k, v) = rows[i];
+        let width = ui.available_width();
+        let name_w = 208.0 - 16.0 - 8.0;
+        let value_w = width - 208.0 - 16.0;
+        let laid: Vec<(Arc<egui::Galley>, Arc<egui::Galley>)> = rows
+            .iter()
+            .map(|(k, v)| {
+                (
+                    ui.painter().layout((*k).to_string(), theme::ui_bold(12.0), p.ink, name_w),
+                    ui.painter().layout((*v).to_string(), text::SMALL.font(), p.ink_2, value_w),
+                )
+            })
+            .collect();
+        let heights: Vec<f32> = laid
+            .iter()
+            .map(|(k, v)| (k.size().y.max(v.size().y) + 22.0).max(40.0))
+            .collect();
+        rows_card(ui, p, &heights, |ui, i, r| {
+            let (kg, vg) = &laid[i];
             let painter = ui.painter();
-            painter.text(
-                pos2(r.left() + 16.0, r.center().y),
-                Align2::LEFT_CENTER,
-                k,
-                theme::ui_bold(12.0),
+            painter.galley(
+                pos2(r.left() + 16.0, r.center().y - kg.size().y / 2.0),
+                kg.clone(),
                 p.ink,
             );
-            painter.text(
-                pos2(r.left() + 208.0, r.center().y),
-                Align2::LEFT_CENTER,
-                v,
-                text::SMALL.font(),
+            painter.galley(
+                pos2(r.left() + 208.0, r.center().y - vg.size().y / 2.0),
+                vg.clone(),
                 p.ink_2,
             );
         });
