@@ -2564,8 +2564,15 @@ impl eframe::App for BibleApp {
         // app is busy for seconds, it is happening here, between frames.
         if std::env::var_os("BIBLE_RS_TRACE_SETTINGS").is_some() {
             let gap = ctx.input(|i| i.unstable_dt);
-            if gap > 0.25 {
+            if gap > 1.0 {
                 eprintln!("frame: {:.0} ms since the last frame began", gap * 1000.0);
+            }
+        }
+        // Test build: the same, into the file, with no Terminal needed.
+        {
+            let gap = ctx.input(|i| i.unstable_dt);
+            if gap > 1.0 {
+                crate::trace_file(&format!("frame: {:.0} ms since the last frame began", gap * 1000.0));
             }
         }
         if let Some(sp) = &mut self.scroll_probe {

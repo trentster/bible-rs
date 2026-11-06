@@ -88,6 +88,30 @@ pub fn trace(t0: Instant, what: &str) {
     }
 }
 
+/// Appends a line to `trace.log` in the app's own data folder.
+///
+/// For a test build only, and plainly so: the reader testing it should not have to open a
+/// Terminal and pipe stderr to a file to tell us where ten seconds went. Remove before release.
+pub fn trace_file(what: &str) {
+    let dir = data_dir();
+    let _ = std::fs::create_dir_all(&dir);
+    use std::io::Write;
+    use std::sync::Once;
+    static FRESH: Once = Once::new();
+    let path = dir.join("trace.log");
+    let mut fresh = false;
+    FRESH.call_once(|| fresh = true);
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(!fresh)
+        .write(true)
+        .truncate(fresh)
+        .open(&path);
+    if let Ok(mut f) = file {
+        let _ = writeln!(f, "{what}");
+    }
+}
+
 /// The renderer: `BIBLE_RS_RENDERER=glow|wgpu` overrides the default.
 pub fn renderer() -> eframe::Renderer {
     match std::env::var("BIBLE_RS_RENDERER").as_deref() {
