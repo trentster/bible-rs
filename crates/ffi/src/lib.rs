@@ -20,9 +20,11 @@ use bible_core::sync::LockExt;
 use bible_core::{BookId, ChapterIdx};
 
 pub mod content;
+pub mod links;
 pub mod tokens;
 
 pub use content::{Block, BlockKind, ChapterContent, ChapterStatus, ContentOptions, Run};
+pub use links::{LexiconEntry, OriginalVerse, OriginalWord, RelatedLink};
 pub use tokens::{Palette, ThemeName, palette};
 
 uniffi::setup_scaffolding!();
