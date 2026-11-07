@@ -9,6 +9,9 @@ struct SelectionBar: View {
         let marks = store.selectionMarks
         let highlighted = Set(marks.compactMap(\.highlight))
         let bookmarked = !store.selectedRefs.isEmpty && marks.filter(\.bookmark).count == store.selectedRefs.count
+        let anchor = store.selectionRef
+        let canRelate = anchor.map(store.hasRelated) ?? false
+        let canWords = anchor.map(store.hasOriginal) ?? false
         VStack(spacing: 12) {
             HStack {
                 Text(store.selectionLabel)
@@ -70,6 +73,14 @@ struct SelectionBar: View {
                 action("Copy", "doc.on.doc") { store.copySelection() }
                 ShareLink(item: store.selectionText, subject: Text(store.selectionLabel)) {
                     label("Share", "square.and.arrow.up")
+                }
+                // The two rows below only appear when there is something behind them, so the bar
+                // stays four wide for a verse the tradition links nowhere and we have no Hebrew for.
+                if canRelate {
+                    action("Related", "link") { store.sheet = .related }
+                }
+                if canWords {
+                    action("Words", "text.book.closed") { store.sheet = .words }
                 }
             }
         }

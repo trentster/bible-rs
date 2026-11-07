@@ -17,6 +17,15 @@ final class BibleUITests: XCTestCase {
 
     private func verse(_ id: String) -> XCUIElement { app.staticTexts[id] }
 
+    /// Types a reference into the toolbar's field and waits for the page to move.
+    private func jump(_ typed: String) {
+        reference.tap()
+        let field = app.searchFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 3))
+        field.tap()
+        field.typeText(typed + "\n")
+    }
+
     /// Waits for the toolbar to name a chapter.
     private func expectChapter(_ title: String, file: StaticString = #filePath, line: UInt = #line) {
         let shown = NSPredicate(format: "label BEGINSWITH %@", title + ".")
@@ -212,6 +221,52 @@ final class BibleUITests: XCTestCase {
     private func row(_ reference: String) -> XCUIElement {
         app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", reference)).firstMatch
     }
+
+    /// John 3:16 is the most cross-referenced verse there is: the row must appear, the card must
+    /// list the links, and tapping one must go there.
+    func testOpensRelatedVersesAndGoesThere() {
+        jump("jn 3:16")
+        expectChapter("John 3")
+        let sixteen = verse("John 3:16")
+        XCTAssertTrue(sixteen.waitForExistence(timeout: 3))
+        sixteen.tap()
+        let related = app.buttons["Related"]
+        XCTAssertTrue(related.waitForExistence(timeout: 5), "no Related row on John 3:16")
+        related.tap()
+        XCTAssertTrue(
+            app.navigationBars["Related to John 3:16"].waitForExistence(timeout: 5),
+            "the card did not name the verse"
+        )
+        let link = app.buttons["Romans 5:8"].firstMatch
+        XCTAssertTrue(link.waitForExistence(timeout: 5), "John 3:16 does not offer Romans 5:8")
+        link.tap()
+        expectChapter("Romans 5")
+        XCTAssertTrue(verse("Romans 5:8").waitForExistence(timeout: 5))
+    }
+
+    /// The verse in Greek, and the dictionary entry behind one of its words.
+    func testReadsTheOriginalWordsAndTheirEntry() {
+        jump("jn 3:16")
+        expectChapter("John 3")
+        let sixteen = verse("John 3:16")
+        XCTAssertTrue(sixteen.waitForExistence(timeout: 3))
+        sixteen.tap()
+        let words = app.buttons["Words"]
+        XCTAssertTrue(words.waitForExistence(timeout: 5), "no Words row on John 3:16")
+        words.tap()
+        XCTAssertTrue(
+            app.navigationBars["Greek · John 3:16"].waitForExistence(timeout: 5),
+            "the words sheet did not name the verse and its language"
+        )
+        let cells = app.cells
+        XCTAssertTrue(cells.count >= 7, "John 3:16 listed \(cells.count) words")
+        cells.element(boundBy: 0).tap()
+        // The entry names itself by the Strong's number, beside its part of speech: "G2316 · noun".
+        let numbered = app.staticTexts.matching(
+            NSPredicate(format: "label MATCHES %@", "G[0-9]{3,5}.*")
+        ).firstMatch
+        XCTAssertTrue(numbered.waitForExistence(timeout: 5), "no Greek number appeared after tapping a word")
+    }
 }
 
 extension XCUIApplication {
@@ -223,4 +278,5 @@ extension XCUIApplication {
         usleep(400_000)
         return button
     }
+
 }

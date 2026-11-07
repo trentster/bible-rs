@@ -68,12 +68,19 @@ struct RootView: View {
                 case .search: SearchView(theme: theme)
                 case .settings: SettingsView(theme: theme)
                 case .study: StudyView(theme: theme)
+                case .related: RelatedSheet(ref: verseAnchor, theme: theme)
+                case .words: WordsSheet(ref: verseAnchor, theme: theme)
                 case .note(let ref): NoteEditor(ref: ref, theme: theme)
                 }
             }
             .environment(store)
             .sheetChrome(theme)
         }
+    }
+
+    /// The verse a look-up sheet speaks about: the one tapped, or where the page is standing.
+    private var verseAnchor: VerseRef {
+        store.selectionRef ?? store.ref(chapter: store.position.chapter, verse: store.position.verse)
     }
 
     private var preferredScheme: ColorScheme? {

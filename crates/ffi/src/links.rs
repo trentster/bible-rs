@@ -64,7 +64,22 @@ fn split(at: VerseRef) -> Result<(BookId, u8, u8), BibleError> {
     Ok((book, at.chapter, at.verse))
 }
 
+/// Are there related verses for this one at all? A bar asks this before offering the row.
+#[uniffi::export]
+pub fn related_has(at: VerseRef) -> Result<bool, BibleError> {
+    let (book, chapter, verse) = split(at)?;
+    Ok(related::has(book, chapter, verse))
+}
+
+/// Is there original text for this verse at all? A bar asks this before offering the row.
+#[uniffi::export]
+pub fn original_has(at: VerseRef) -> Result<bool, BibleError> {
+    let (book, chapter, verse) = split(at)?;
+    Ok(original::has(book, chapter, verse))
+}
+
 /// The verses linked to this one, best-voted first. Empty when the tradition links none.
+#[uniffi::export]
 pub fn related_verses(at: VerseRef) -> Result<Vec<RelatedLink>, BibleError> {
     let (book, chapter, verse) = split(at)?;
     Ok(related::of(book, chapter, verse)
@@ -82,11 +97,13 @@ pub fn related_verses(at: VerseRef) -> Result<Vec<RelatedLink>, BibleError> {
 }
 
 /// How to credit the cross references.
+#[uniffi::export]
 pub fn related_credit() -> String {
     related::credit().to_string()
 }
 
 /// The words of one verse in the language it was written in, or `None` when we have none for it.
+#[uniffi::export]
 pub fn original_verse(at: VerseRef) -> Result<Option<OriginalVerse>, BibleError> {
     let (book, chapter, verse) = split(at)?;
     Ok(original::verse(book, chapter, verse).map(|found| OriginalVerse {
@@ -105,6 +122,7 @@ pub fn original_verse(at: VerseRef) -> Result<Option<OriginalVerse>, BibleError>
 }
 
 /// The dictionary entry behind a Strong's number, or `None` when there is no entry for it.
+#[uniffi::export]
 pub fn lexicon_entry(strong: String) -> Result<Option<LexiconEntry>, BibleError> {
     Ok(original::entry(&strong).map(|entry| {
         // Take the lines before the fields move: `lines()` borrows the body it reads.
@@ -121,6 +139,7 @@ pub fn lexicon_entry(strong: String) -> Result<Option<LexiconEntry>, BibleError>
 }
 
 /// How to credit the original-language text and lexicon.
+#[uniffi::export]
 pub fn original_credit() -> String {
     original::credit().to_string()
 }

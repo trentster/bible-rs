@@ -60,7 +60,7 @@ struct JumpRequest: Equatable {
 }
 
 enum Sheet: Identifiable, Equatable {
-    case books, search, settings, study
+    case books, search, settings, study, related, words
     case note(VerseRef)
 
     var id: String {
@@ -69,6 +69,8 @@ enum Sheet: Identifiable, Equatable {
         case .search: "search"
         case .settings: "settings"
         case .study: "study"
+        case .related: "related"
+        case .words: "words"
         case .note(let v): "note-\(v.book)-\(v.chapter)-\(v.verse)"
         }
     }
@@ -178,6 +180,14 @@ final class Store {
     func ref(chapter: Int, verse: Int) -> VerseRef {
         let book = book(of: chapter)
         return VerseRef(book: book.index, chapter: UInt8(chapter - Int(book.firstChapter) + 1), verse: UInt8(verse))
+    }
+
+    /// The whole-Bible chapter index for a book and one of its own chapters. Cross references name
+    /// a book and a chapter inside it, while the reader moves by whole-Bible index.
+    func chapterIndex(book: UInt8, chapter: UInt8) -> Int? {
+        guard let info = bookList.first(where: { $0.index == book }), chapter >= 1 else { return nil }
+        let index = Int(info.firstChapter) + Int(chapter) - 1
+        return index < Int(info.firstChapter) + Int(info.chapters) ? index : nil
     }
 
     var title: String { chapterLabel(index: UInt16(position.chapter)) }
@@ -298,6 +308,44 @@ final class Store {
     func items(_ kind: StudyKind) -> [StudyItem] {
         bible.studyItems(kind: kind, translation: settings.translation)
     }
+
+    // MARK: - Beside the text
+
+    /// Are there related verses for this one? Asked before the bar offers the row, so a reader is
+    /// never sent to an empty card.
+    func hasRelated(_ ref: VerseRef) -> Bool {
+        (try? relatedHas(at: ref)) ?? false
+    }
+
+    /// The verses the tradition links to this one, best-voted first.
+    func related(_ ref: VerseRef) -> [RelatedLink] {
+        (try? relatedVerses(at: ref)) ?? []
+    }
+
+    /// How to credit the cross references, for the foot of the card.
+    var relatedCreditLine: String { relatedCredit() }
+
+    /// Is there original text for this verse? Said the same way the Mac says it: only offer the
+    /// row when there is something behind it.
+    func hasOriginal(_ ref: VerseRef) -> Bool {
+        (try? originalHas(at: ref)) ?? false
+    }
+
+    /// The verse's words in the language it was written in.
+    func original(_ ref: VerseRef) -> OriginalVerse? {
+        (try? originalVerse(at: ref)) ?? nil
+    }
+
+    /// The dictionary entry behind a Strong's number, four digits zero-padded.
+    func entry(_ strong: String) -> LexiconEntry? {
+        (try? lexiconEntry(strong: strong)) ?? nil
+    }
+
+    /// How to credit the original-language text and lexicon.
+    var wordsCreditLine: String { originalCredit() }
+
+    /// The verse a selection sheet should speak about: the first one tapped.
+    var selectionRef: VerseRef? { selectedRefs.first }
 
     func export(_ format: ExportFormat) -> String? {
         try? bible.export(format: format, translation: settings.translation)
