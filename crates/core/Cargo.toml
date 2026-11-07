@@ -18,6 +18,8 @@ native = ["import", "dep:rusqlite"]
 # The importers (USFM, OSIS, Zefania, SWORD; zips), which the web build takes without `native`
 # to convert files the reader picks in the browser.
 import = ["dep:zip", "dep:flate2"]
+# Making the voice speak, which the apps use and the web build never does.
+synth = ["dep:ptts"]
 
 [dependencies]
 anyhow.workspace = true
@@ -27,6 +29,7 @@ memchr.workspace = true
 rusqlite = { version = "0.40", features = ["bundled"], optional = true }
 zip = { version = "9", default-features = false, features = ["deflate"], optional = true }
 flate2 = { version = "1", optional = true }
+ptts = { version = "0.4", optional = true, features = ["hf"] }
 
 # The C zstd needs a C compiler that targets wasm; the browser decodes with a pure-Rust one.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

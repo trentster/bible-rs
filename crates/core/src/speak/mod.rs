@@ -1,5 +1,8 @@
 //! Read Aloud: what to say and how a session runs. Audio lives in the frontend.
 
+pub mod bundle;
+#[cfg(feature = "synth")]
+pub mod engine;
 mod session;
 mod stretch;
 mod text;

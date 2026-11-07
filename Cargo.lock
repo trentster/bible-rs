@@ -543,6 +543,7 @@ dependencies = [
  "flate2",
  "js-sys",
  "memchr",
+ "ptts",
  "rusqlite",
  "ruzstd",
  "serde",
