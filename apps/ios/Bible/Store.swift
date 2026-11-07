@@ -60,7 +60,7 @@ struct JumpRequest: Equatable {
 }
 
 enum Sheet: Identifiable, Equatable {
-    case books, search, settings, study, related, words
+    case books, search, settings, study, related, words, listen
     case note(VerseRef)
 
     var id: String {
@@ -71,6 +71,7 @@ enum Sheet: Identifiable, Equatable {
         case .study: "study"
         case .related: "related"
         case .words: "words"
+        case .listen: "listen"
         case .note(let v): "note-\(v.book)-\(v.chapter)-\(v.verse)"
         }
     }
@@ -99,6 +100,8 @@ final class Store {
     private(set) var marksVersion = 0
     var sheet: Sheet?
     var barsHidden = false
+    /// Read Aloud: the voice, the audio and the timer.
+    let speaker = Speaker()
     private(set) var toast: String?
 
     @ObservationIgnored private var saveTask: Task<Void, Never>?
@@ -167,6 +170,7 @@ final class Store {
     }
 
     private func translationChanged() {
+        stopReading()
         selection = nil
         warm()
     }
@@ -195,6 +199,7 @@ final class Store {
     // MARK: Moving
 
     func go(to chapter: Int, verse: Int = 1, flash: Bool = false, animated: Bool = false) {
+        stopReading()
         selection = nil
         barsHidden = false
         position = Position(chapter: chapter, verse: verse)
@@ -307,6 +312,33 @@ final class Store {
 
     func items(_ kind: StudyKind) -> [StudyItem] {
         bible.studyItems(kind: kind, translation: settings.translation)
+    }
+
+    // MARK: - Read Aloud
+
+    /// The verses of a chapter as Read Aloud says them, opening announcement and all.
+    func spoken(_ chapter: Int) -> [SpokenUtterance] {
+        (try? bible.spokenChapter(translation: settings.translation, index: UInt16(chapter))) ?? []
+    }
+
+    /// Starts the reading where the page is standing, or stops the one that is running.
+    func toggleReading() {
+        if speaker.phase.isOn {
+            speaker.stop()
+            return
+        }
+        guard speaker.installed else {
+            sheet = .listen
+            return
+        }
+        speaker.start(chapterIndex: position.chapter) { [weak self] index in
+            (self?.spoken(index) ?? [], index)
+        }
+    }
+
+    /// The voice follows the page: anything that moves the reader ends the reading.
+    func stopReading() {
+        if speaker.phase.isOn { speaker.stop() }
     }
 
     // MARK: - Beside the text

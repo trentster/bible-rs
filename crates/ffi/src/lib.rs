@@ -331,6 +331,30 @@ impl Bible {
         ChapterContent::unavailable(meta.as_ref(), c, status)
     }
 
+    /// What Read Aloud would say for a chapter: the opening announcement first ("John, chapter
+    /// three"), then the verses in order, each carrying the verse it belongs to and the breath to
+    /// take after it. The phone plays the audio; the words are decided here, once, for both apps.
+    pub fn spoken_chapter(
+        &self,
+        translation: String,
+        index: u16,
+    ) -> Result<Vec<speech::SpokenUtterance>, BibleError> {
+        let c = ChapterIdx(index.min(CHAPTER_COUNT as u16 - 1));
+        let lib = self.library();
+        let text = match lib.chapter(&translation, c) {
+            Chapter::Ready(text) => text,
+            Chapter::Missing => return Err(fail("that chapter is not in this translation")),
+            Chapter::Failed(message) => return Err(fail(message)),
+        };
+        let verses: Vec<(u32, String)> =
+            text.verses_in(c).map(|v| (v.number as u32, v.text.to_string())).collect();
+        let said = bible_core::speak::chapter(c.book().name(), c.chapter() as u32, &verses);
+        Ok(said
+            .into_iter()
+            .map(|u| speech::SpokenUtterance { text: u.text, pause_ms: u.pause_ms, verse: u.verse })
+            .collect())
+    }
+
     /// Searches a local translation: every word must appear (as a word prefix unless
     /// `whole_words`), `"quoted phrases"` in order, `-words` excluded. Returns `limit` hits from
     /// `offset` on.

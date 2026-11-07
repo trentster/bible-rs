@@ -70,6 +70,7 @@ struct RootView: View {
                 case .study: StudyView(theme: theme)
                 case .related: RelatedSheet(ref: verseAnchor, theme: theme)
                 case .words: WordsSheet(ref: verseAnchor, theme: theme)
+                case .listen: ListenSheet()
                 case .note(let ref): NoteEditor(ref: ref, theme: theme)
                 }
             }
@@ -152,6 +153,7 @@ struct TopBar: View {
             Spacer(minLength: 0)
 
             HStack(spacing: 0) {
+                listenTool
                 tool("magnifyingglass", "Search", id: "search") { store.sheet = .search }
                 tool("textformat.size", "Text and theme", id: "settings") { store.sheet = .settings }
                 tool("bookmark", "Bookmarks, highlights and notes", id: "study") { store.sheet = .study }
@@ -160,6 +162,38 @@ struct TopBar: View {
             .glass(in: Capsule(), theme: theme)
         }
         .padding(.horizontal, 16)
+    }
+
+    /// Read Aloud: one button that starts and stops, and opens its own panel on a long press.
+    @ViewBuilder
+    private var listenTool: some View {
+        let phase = store.speaker.phase
+        let symbol = phase.isOn ? (phase == .paused ? "play.fill" : "waveform") : "play"
+        Button {
+            store.toggleReading()
+        } label: {
+            Image(systemName: symbol)
+                .font(.system(size: 17, weight: .medium))
+                .foregroundStyle(phase.isOn ? Color(theme.accent) : Color(theme.ink))
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .accessibilityLabel(phase.isOn ? "Stop reading aloud" : "Read aloud")
+        .accessibilityIdentifier("listen")
+        .contextMenu {
+            Button {
+                store.sheet = .listen
+            } label: {
+                Label("Read Aloud settings", systemImage: "slider.horizontal.3")
+            }
+            if phase.isOn {
+                Button(role: .destructive) {
+                    store.speaker.stop()
+                } label: {
+                    Label("Stop", systemImage: "stop.fill")
+                }
+            }
+        }
     }
 
     private func tool(_ symbol: String, _ label: String, id: String, action: @escaping () -> Void) -> some View {

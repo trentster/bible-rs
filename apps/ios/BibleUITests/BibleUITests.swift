@@ -224,6 +224,21 @@ final class BibleUITests: XCTestCase {
 
     /// John 3:16 is the most cross-referenced verse there is: the row must appear, the card must
     /// list the links, and tapping one must go there.
+    /// Read Aloud on a fresh install: the button opens the panel, and the panel offers the one-time
+    /// download rather than trying to speak without a voice.
+    func testListenOffersTheVoiceDownloadWhenThereIsNoVoice() {
+        app.buttons["listen"].tap()
+        XCTAssertTrue(
+            app.navigationBars["Read Aloud"].waitForExistence(timeout: 5),
+            "the Listen button did not open Read Aloud's panel"
+        )
+        XCTAssertTrue(
+            app.buttons["Download the voice"].waitForExistence(timeout: 5),
+            "with no voice installed the panel should offer the download"
+        )
+        XCTAssertFalse(app.buttons["Start reading"].exists, "Start reading should not be offered without a voice")
+    }
+
     func testOpensRelatedVersesAndGoesThere() {
         jump("jn 3:16")
         expectChapter("John 3")

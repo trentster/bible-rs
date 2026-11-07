@@ -40,7 +40,17 @@ pub struct VoiceFile {
     pub sha256: String,
 }
 
+/// One thing Read Aloud says: a sentence or a clause, how long to breathe after it, and the verse
+/// it belongs to (nothing for the opening announcement).
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct SpokenUtterance {
+    pub text: String,
+    pub pause_ms: u32,
+    pub verse: Option<u8>,
+}
+
 /// The voices that ship with the model.
+#[uniffi::export]
 pub fn voices() -> Vec<VoiceInfo> {
     VOICES
         .iter()
@@ -58,6 +68,7 @@ pub fn voices() -> Vec<VoiceInfo> {
 }
 
 /// Every file the voice needs, with its digest.
+#[uniffi::export]
 pub fn voice_files() -> Vec<VoiceFile> {
     bundle::FILES
         .iter()
@@ -66,16 +77,19 @@ pub fn voice_files() -> Vec<VoiceFile> {
 }
 
 /// Where the files come from, before a name is appended.
+#[uniffi::export]
 pub fn voice_bundle_url() -> String {
     bundle::BUNDLE_URL.to_string()
 }
 
 /// What the download weighs in total, for a progress figure a reader can judge.
+#[uniffi::export]
 pub fn voice_total_bytes() -> u64 {
     bundle::TOTAL_BYTES
 }
 
 /// Whether every file is in `dir`. All eight, or it is not there.
+#[uniffi::export]
 pub fn voice_complete(dir: String) -> bool {
     bundle::complete(&PathBuf::from(dir))
 }
@@ -93,7 +107,7 @@ impl Speech {
     /// Opens the voice in `dir`. The message that comes back is the one the reader sees, so it says
     /// what a person can do rather than what a pointer was null.
     #[uniffi::constructor]
-    pub fn open(dir: String) -> Result<std::sync::Arc<Self>, BibleError> {
+    pub fn load(dir: String) -> Result<std::sync::Arc<Self>, BibleError> {
         let engine = Engine::open(&PathBuf::from(dir)).map_err(|why| BibleError::Failed { message: why })?;
         let rate = engine.sample_rate();
         Ok(std::sync::Arc::new(Self { engine: Mutex::new(engine), rate }))
@@ -152,7 +166,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&empty);
         std::fs::create_dir_all(&empty).expect("a scratch directory");
         assert!(!voice_complete(empty.to_string_lossy().to_string()));
-        assert!(Speech::open(empty.to_string_lossy().to_string()).is_err());
+        assert!(Speech::load(empty.to_string_lossy().to_string()).is_err());
         let _ = std::fs::remove_dir_all(&empty);
     }
 
@@ -164,11 +178,31 @@ mod tests {
             eprintln!("no voice on this machine, so nothing to say");
             return;
         }
-        let speech = Speech::open(dir.to_string_lossy().to_string()).expect("the voice opens");
+        let speech = Speech::load(dir.to_string_lossy().to_string()).expect("the voice opens");
         assert!(speech.sample_rate() >= 16_000);
         let pcm = speech.say("The Lord is my shepherd.".to_string(), "russell".to_string()).expect("speech");
         assert!(!pcm.is_empty());
         assert!(pcm.iter().all(|s| s.is_finite()));
+    }
+
+    /// The announcement, then the verses in order, carrying their numbers — what the phone's player
+    /// steps through.
+    #[test]
+    fn a_chapter_is_spoken_from_its_first_word_with_each_verse_marked() {
+        let dir = std::env::temp_dir().join("bible-rs-ffi-spoken");
+        let _ = std::fs::remove_dir_all(&dir);
+        let bible = crate::Bible::new(dir.to_string_lossy().to_string()).expect("a bible");
+        let john = crate::books().into_iter().find(|b| b.name == "John").expect("John");
+        let index = u16::from(john.first_chapter) + 2; // John 3
+        let said = bible.spoken_chapter("kjv".to_string(), index).expect("John 3");
+        assert!(said.len() > 30, "John 3 came back as {} utterances", said.len());
+        assert!(said[0].verse.is_none(), "the first utterance should be the announcement");
+        assert!(said[0].text.contains("John"), "the announcement does not name the book: {}", said[0].text);
+        let numbered: Vec<u8> = said.iter().filter_map(|u| u.verse).collect();
+        assert_eq!(numbered.first().copied(), Some(1), "the reading does not start at verse 1");
+        assert!(numbered.windows(2).all(|w| w[0] <= w[1]), "the verses are out of order");
+        assert!(said.iter().all(|u| !u.text.trim().is_empty()), "an empty utterance would be silence");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -178,7 +212,7 @@ mod tests {
             eprintln!("no voice on this machine, so nothing to say with");
             return;
         }
-        let speech = Speech::open(dir.to_string_lossy().to_string()).expect("the voice opens");
+        let speech = Speech::load(dir.to_string_lossy().to_string()).expect("the voice opens");
         let refused = speech.say("hello".to_string(), "nobody".to_string());
         assert!(refused.is_err(), "an invented voice was allowed to speak");
     }
