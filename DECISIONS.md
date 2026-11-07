@@ -776,3 +776,15 @@ pid 439(coreaudiod): PreventUserIdleSystemSleep named:
 coreaudiod holds the assertion, attributed to Lamplit's own PID, for as long as it plays audio. So
 macOS keeps the Mac from idle-sleeping while it reads, with no keep-awake code of ours — and the
 2-hour timer and "Keep reading" lean on that rather than on anything we ship.
+
+## Settings settles on its own, so it is left alone
+
+An earlier trace showed Settings drawing about 245 frames in six seconds with nothing on screen
+changing, which looked like a window burning frames for no reason. It is not: measured on the Mac
+that runs the app, with Settings open and the pointer untouched for thirty seconds, Lamplit sat at
+**0.0% CPU**. The bursts of frames settle by themselves — the chapter pre-warming behind the panel
+finishes, and then egui stops drawing.
+
+So there is no fix here and no structural change: Settings stays an immediate viewport. The refactor
+to a deferred viewport was considered and rejected on the measurement, not on effort. If a future
+change makes the panel animate or poll again, measure CPU the same way before believing it.
