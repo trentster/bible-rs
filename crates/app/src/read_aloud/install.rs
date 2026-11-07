@@ -18,7 +18,7 @@ use sha2::{Digest, Sha256};
 
 /// Where the voice comes from: a release asset on the project's own mirror, one file per request so
 /// a slow line makes progress that can be seen.
-const BUNDLE: &str = "https://github.com/trentster/bible-rs/releases/download/speech-1";
+const BUNDLE: &str = "https://github.com/trentster/lamplit/releases/download/speech-1";
 
 /// Every file the voice is made of, and the digest it must have.
 ///

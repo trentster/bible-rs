@@ -38,7 +38,7 @@ ENTITLEMENTS="packaging/macos/entitlements.plist"
 # private half of this key, which `generate_keys --account bible-rs` keeps in the release Mac's
 # login keychain (RELEASING.md). Every release must be signed with the same key.
 SPARKLE_UPDATES="${SPARKLE_UPDATES:-0}"
-FEED_URL="https://github.com/trentster/bible-rs/releases/latest/download/appcast.xml"
+FEED_URL="https://github.com/trentster/lamplit/releases/latest/download/appcast.xml"
 SPARKLE_PUBLIC_KEY="Pq8ULcnRQOe3FxC6l7qBrhZ4VS3W53yxzZeO9z9dmY0="
 if [[ "$SPARKLE_UPDATES" == "1" ]]; then
   SPARKLE_DIR="$(scripts/fetch-sparkle.sh)"

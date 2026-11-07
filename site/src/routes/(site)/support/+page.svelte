@@ -6,7 +6,7 @@
 	const title = `Support | ${SITE_NAME}`;
 	const description = 'Help with Lamplit for iPhone, iPad and Mac, and how to report a problem.';
 	const url = `${SITE_URL}/support`;
-	const issues = 'https://github.com/trentster/bible-rs/issues';
+	const issues = 'https://github.com/trentster/lamplit/issues';
 </script>
 
 <svelte:head>

@@ -54,13 +54,13 @@ Beyond upstream: **study tools and a voice**, all of them offline.
   site's readers voted down are left out, so 43 verses offer nothing at all.
 - **The voice arrives when you ask for it** — 62 MB of [Phonon-31m](https://huggingface.co/gradium/phonon-31m-en)
   (Apache-2.0) downloads once from this repository's
-  [`speech-1` release](https://github.com/trentster/bible-rs/releases/tag/speech-1), each file checked
+  [`speech-1` release](https://github.com/trentster/lamplit/releases/tag/speech-1), each file checked
   against a pinned SHA-256 before it is written. It is the only network path Read Aloud has.
 - **Words are said as they should be** — a small pronunciation table fixes what a spelling-driven
   voice gets wrong ("ye" said as *yee*, "saith" as *seth*, "Bezaleel" as *bez-a-lail*), applied to
   the spoken copy only; the page keeps its own spelling.
 
-Download the latest build from [Releases](https://github.com/trentster/bible-rs/releases).
+Download the latest build from [Releases](https://github.com/trentster/lamplit/releases).
 
 <table>
 <tr>
